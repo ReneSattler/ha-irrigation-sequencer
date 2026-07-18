@@ -118,6 +118,10 @@ def _get_manager(hass: HomeAssistant, entry_id: str) -> IrrigationSequencerManag
 
 
 def _async_register_services(hass: HomeAssistant) -> None:
+    # Services are registered per-domain, not per-entry, but this function
+    # runs once per config entry - skip if a previous entry already
+    # registered them so a second irrigation system doesn't duplicate/reset
+    # the handlers.
     if hass.services.has_service(DOMAIN, SERVICE_SET_ZONE_ORDER):
         return
 
