@@ -51,7 +51,7 @@ class IrrigationSequencerConfigFlow(ConfigFlow, domain=DOMAIN):
             {
                 vol.Required("name", default="Lawn Irrigation"): TextSelector(),
                 vol.Required(CONF_ZONE_ENTITIES): EntitySelector(
-                    EntitySelectorConfig(domain=["valve", "switch"], multiple=True)
+                    EntitySelectorConfig(domain=["valve", "switch", "light"], multiple=True)
                 ),
             }
         )
@@ -89,7 +89,7 @@ class IrrigationSequencerOptionsFlow(OptionsFlow):
         schema = vol.Schema(
             {
                 vol.Required(CONF_ZONE_ENTITIES, default=current_zones): EntitySelector(
-                    EntitySelectorConfig(domain=["valve", "switch"], multiple=True)
+                    EntitySelectorConfig(domain=["valve", "switch", "light"], multiple=True)
                 ),
             }
         )

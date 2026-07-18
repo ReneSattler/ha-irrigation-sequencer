@@ -24,7 +24,7 @@ set_zone_duration:
       required: true
       selector:
         entity:
-          domain: [valve, switch]
+          domain: [valve, switch, light]
     minutes:
       required: true
       selector:
@@ -45,7 +45,7 @@ set_zone_name:
       required: true
       selector:
         entity:
-          domain: [valve, switch]
+          domain: [valve, switch, light]
     name:
       required: true
       selector:
