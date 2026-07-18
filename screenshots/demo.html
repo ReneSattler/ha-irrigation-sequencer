@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Irrigation Sequencer Card - Demo</title>
+<style>
+  :root {
+    --primary-color: #03a9f4;
+    --success-color: #4caf50;
+    --warning-color: #ff9800;
+    --error-color: #db4437;
+    --info-color: #03a9f4;
+    --disabled-text-color: #9e9e9e;
+    --primary-text-color: #212121;
+    --secondary-text-color: #727272;
+    --divider-color: #e0e0e0;
+    --card-background-color: #ffffff;
+    --secondary-background-color: #f0f2f5;
+    --primary-background-color: #fafafa;
+  }
+  body {
+    margin: 0;
+    padding: 32px;
+    background: var(--primary-background-color);
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--primary-text-color);
+    display: flex;
+    justify-content: center;
+  }
+  .frame { width: 420px; }
+
+  /* Minimal ha-card polyfill so the card looks right outside a real HA frontend */
+  ha-card {
+    display: block;
+    background: var(--card-background-color);
+    border-radius: 12px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  }
+
+  /* Minimal ha-icon polyfill (emoji fallback, real HA renders proper MDI SVGs) */
+  ha-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    font-size: 16px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <irrigation-sequencer-card id="card"></irrigation-sequencer-card>
+  </div>
+
+  <script>
+    // Emoji fallback so ha-icon renders something in this standalone demo.
+    const ICONS = {
+      "mdi:drag-vertical": "⋮⋮",
+      "mdi:sprinkler-variant": "💧",
+      "mdi:sprinkler": "💦",
+      "mdi:timer-sand": "⏳",
+      "mdi:weather-night": "🌙",
+      "mdi:snowflake": "❄️",
+      "mdi:weather-rainy": "🌧️",
+      "mdi:weather-partly-cloudy": "⛅",
+      "mdi:cloud-outline": "☁️",
+      "mdi:thermometer-low": "🌡️",
+      "mdi:thermometer-high": "🌡️",
+      "mdi:water-percent": "💧",
+      "mdi:play": "▶️",
+      "mdi:stop": "⏹️",
+    };
+    class HaIcon extends HTMLElement {
+      static get observedAttributes() { return ["icon"]; }
+      connectedCallback() { this._render(); }
+      attributeChangedCallback() { this._render(); }
+      _render() { this.textContent = ICONS[this.getAttribute("icon")] || ""; }
+    }
+    class HaCard extends HTMLElement {
+      connectedCallback() {
+        if (!this.querySelector(".ha-card-inner")) {
+          const wrapper = document.createElement("div");
+          wrapper.className = "ha-card-inner";
+          wrapper.style.padding = "16px";
+          while (this.firstChild) wrapper.appendChild(this.firstChild);
+          this.appendChild(wrapper);
+        }
+      }
+    }
+    customElements.define("ha-icon", HaIcon);
+    customElements.define("ha-card", HaCard);
+  </script>
+
+  <script type="module">
+    import "../irrigation-sequencer-card/irrigation-sequencer-card.js";
+
+    const params = new URLSearchParams(location.search);
+    const scenario = params.get("scenario") || "idle";
+    const lang = params.get("lang") || "en";
+
+    const zoneNames_en = ["Front lawn", "Back lawn", "Flower beds", "Vegetable garden", "Hedge"];
+    const zoneNames_de = ["Vorgarten", "Rasen hinten", "Blumenbeete", "Gemüsegarten", "Hecke"];
+    const zoneNames = lang === "de" ? zoneNames_de : zoneNames_en;
+
+    const zoneEntities = zoneNames.map((_, i) => `switch.zone_${i + 1}`);
+    const zones = zoneEntities.map((entity_id, i) => ({
+      entity_id,
+      duration_minutes: [12, 8, 15, 10, 6][i],
+      position: i,
+    }));
+
+    const isRunning = scenario === "running";
+
+    const states = {
+      "sensor.lawn_irrigation_status": {
+        entity_id: "sensor.lawn_irrigation_status",
+        state: isRunning ? "running" : "idle",
+        attributes: {
+          entry_id: "demo_entry",
+          zones,
+          pause_between_zones_seconds: 120,
+          start_time: "05:00:00",
+          winter_mode: false,
+          rain_pause_until: null,
+          current_zone_index: isRunning ? 2 : null,
+          current_zone_entity_id: isRunning ? "switch.zone_3" : null,
+          seconds_remaining_zone: isRunning ? 320 : 0,
+          seconds_remaining_total: isRunning ? 940 : 0,
+          next_run: "2026-07-19T05:00:00+02:00",
+          weather_adjustment_enabled: true,
+          weather_entity: "weather.home",
+          weather_reference_temp: 20,
+          weather_hot_temp: 30,
+          weather_hot_factor: 2.0,
+          weather_current_temp: 27,
+          weather_current_factor: 1.7,
+        },
+      },
+      "weather.home": {
+        entity_id: "weather.home",
+        state: "sunny",
+        attributes: { friendly_name: lang === "de" ? "Zuhause" : "Home", temperature: 27 },
+      },
+    };
+
+    zoneEntities.forEach((id, i) => {
+      states[id] = { entity_id: id, state: "off", attributes: { friendly_name: zoneNames[i] } };
+    });
+
+    const hass = {
+      language: lang,
+      locale: { language: lang },
+      states,
+      callService: () => {},
+    };
+
+    const card = document.getElementById("card");
+    card.setConfig({
+      entity: "sensor.lawn_irrigation_status",
+      title: lang === "de" ? "Rasenbewässerung" : "Lawn Irrigation",
+    });
+    card.hass = hass;
+  </script>
+</body>
+</html>

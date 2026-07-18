@@ -1,0 +1,149 @@
+set_zone_order:
+  name: Set zone order
+  description: Sets the irrigation order of the zones.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    zones:
+      required: true
+      example: '["switch.zone_1", "switch.zone_3", "switch.zone_2"]'
+      selector:
+        object:
+
+set_zone_duration:
+  name: Set zone duration
+  description: Sets how long a single zone is irrigated.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: [valve, switch]
+    minutes:
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 180
+          unit_of_measurement: min
+
+set_pause_between_zones:
+  name: Set pause between zones
+  description: Sets the pause between two irrigation zones.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    seconds:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 3600
+          unit_of_measurement: s
+
+set_start_time:
+  name: Set start time
+  description: Sets the daily (night) start time of the sequence.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    start_time:
+      required: true
+      selector:
+        time:
+
+set_rain_pause:
+  name: Set rain pause
+  description: Pauses irrigation for 1-14 days (e.g. after rainfall).
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    days:
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 14
+          unit_of_measurement: days
+
+clear_rain_pause:
+  name: Clear rain pause
+  description: Ends an active rain pause immediately.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+
+set_weather_adjustment:
+  name: Set weather adjustment
+  description: >-
+    Configures temperature-based duration adjustment. The duration of every
+    zone is multiplied by a factor derived linearly from the current
+    temperature of the given weather entity: factor 1.0 at reference_temp,
+    hot_factor at hot_temp.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    enabled:
+      required: true
+      selector:
+        boolean:
+    weather_entity:
+      required: false
+      selector:
+        entity:
+          domain: weather
+    reference_temp:
+      required: true
+      selector:
+        number:
+          min: -10
+          max: 40
+          unit_of_measurement: "°C"
+    hot_temp:
+      required: true
+      selector:
+        number:
+          min: -10
+          max: 50
+          unit_of_measurement: "°C"
+    hot_factor:
+      required: true
+      selector:
+        number:
+          min: 0.1
+          max: 3
+          step: 0.1
+
+start_now:
+  name: Start sequence now
+  description: Starts the irrigation sequence immediately.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+
+stop:
+  name: Stop sequence
+  description: Immediately aborts a running irrigation sequence.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
