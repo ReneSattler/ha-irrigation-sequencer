@@ -33,6 +33,24 @@ set_zone_duration:
           max: 180
           unit_of_measurement: min
 
+set_zone_name:
+  name: Set zone name
+  description: Sets a custom display name for a zone (independent of the entity name).
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: [valve, switch]
+    name:
+      required: true
+      selector:
+        text:
+
 set_pause_between_zones:
   name: Set pause between zones
   description: Sets the pause between two irrigation zones.

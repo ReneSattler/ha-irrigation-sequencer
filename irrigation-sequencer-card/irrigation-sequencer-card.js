@@ -1,7 +1,10 @@
 /**
- * Irrigation Sequencer Card
- * Graphical Lovelace card for the "Irrigation Sequencer" integration.
- * No build dependencies - a plain Web Component (Shadow DOM).
+ * Irrigation Sequencer cards
+ * Two graphical Lovelace cards for the "Irrigation Sequencer" integration,
+ * styled after Home Assistant's native Tile cards:
+ *   - irrigation-sequencer-status-card: read-only status overview
+ *   - irrigation-sequencer-settings-card: all configuration controls
+ * No build dependencies - plain Web Components (Shadow DOM).
  * UI text follows the Home Assistant language (hass.language), falling
  * back to English.
  */
@@ -17,6 +20,9 @@ const TRANSLATIONS = {
       winter_mode: "Winter mode active",
       rain_pause: "Rain pause active",
     },
+    statusCardTitle: "Irrigation",
+    settingsCardTitle: "Irrigation settings",
+    zonesLabel: (n) => `${n} zones`,
     pauseBetweenZones: "Pause between zones",
     nightStart: "Night start",
     winterMode: "Winter mode",
@@ -41,6 +47,8 @@ const TRANSLATIONS = {
     pickEntity: "Irrigation Sequencer status entity",
     pickEntityPlaceholder: "- select -",
     title: "Title (optional)",
+    zoneNamePlaceholder: "Zone name",
+    zones: "Zones",
   },
   de: {
     status: {
@@ -50,6 +58,9 @@ const TRANSLATIONS = {
       winter_mode: "Wintermodus aktiv",
       rain_pause: "Regen-Pause aktiv",
     },
+    statusCardTitle: "Bewässerung",
+    settingsCardTitle: "Bewässerungseinstellungen",
+    zonesLabel: (n) => `${n} Zonen`,
     pauseBetweenZones: "Pause zwischen Zonen",
     nightStart: "Nachtstart",
     winterMode: "Wintermodus",
@@ -74,6 +85,8 @@ const TRANSLATIONS = {
     pickEntity: "Irrigation-Sequencer-Status-Entität",
     pickEntityPlaceholder: "- auswählen -",
     title: "Titel (optional)",
+    zoneNamePlaceholder: "Zonen-Name",
+    zones: "Zonen",
   },
 };
 
@@ -102,25 +115,17 @@ function friendlyName(hass, entityId) {
   return state?.attributes?.friendly_name || entityId;
 }
 
-class IrrigationSequencerCard extends HTMLElement {
-  static getConfigElement() {
-    return document.createElement("irrigation-sequencer-card-editor");
-  }
+function zoneDisplayName(hass, zone) {
+  return zone.name?.trim() ? zone.name : friendlyName(hass, zone.entity_id);
+}
 
-  static getStubConfig(hass) {
-    const entity = Object.keys(hass.states).find(
-      (id) => id.startsWith("sensor.") && hass.states[id].attributes?.zones !== undefined
-    );
-    return { entity: entity || "", title: "Irrigation" };
-  }
-
+/** Shared base: config, hass, service calls, entity lookup. */
+class IrrigationSequencerBaseCard extends HTMLElement {
   setConfig(config) {
     if (!config.entity) {
       throw new Error("Please select an Irrigation Sequencer status entity (entity).");
     }
     this._config = config;
-    this._dragIndex = null;
-    this._suppressRender = false;
     if (!this.shadowRoot) {
       this.attachShadow({ mode: "open" });
     }
@@ -133,11 +138,6 @@ class IrrigationSequencerCard extends HTMLElement {
     }
   }
 
-  getCardSize() {
-    const zones = this._entityState()?.attributes?.zones?.length || 4;
-    return 4 + Math.ceil(zones / 2);
-  }
-
   _entityState() {
     return this._hass?.states[this._config.entity];
   }
@@ -147,6 +147,99 @@ class IrrigationSequencerCard extends HTMLElement {
     if (!stateObj) return;
     const entryId = stateObj.attributes.entry_id;
     this._hass.callService(DOMAIN, service, { entry_id: entryId, ...extra });
+  }
+
+  _switchEntityId(entryId, translationKey) {
+    return Object.keys(this._hass.states).find(
+      (id) =>
+        id.startsWith("switch.") &&
+        this._hass.states[id].attributes?.entry_id === entryId &&
+        id.includes(translationKey)
+    );
+  }
+
+  _sharedStyles() {
+    return `
+      ha-card { padding: 12px 16px; }
+      .tile-header { display: flex; align-items: center; gap: 12px; }
+      .tile-icon { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+        background: color-mix(in srgb, var(--tile-color) 20%, transparent); color: var(--tile-color); }
+      .tile-icon.spraying { animation: pulse 1s ease-in-out infinite; }
+      @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.65; transform: scale(1.1); } }
+      .tile-text { flex: 1; min-width: 0; }
+      .tile-primary { font-size: 1.05em; font-weight: 600; color: var(--primary-text-color); }
+      .tile-secondary { font-size: 0.85em; color: var(--secondary-text-color); }
+      .tile-actions { display: flex; gap: 6px; flex-shrink: 0; }
+      .tile-icon-btn { width: 36px; height: 36px; border-radius: 50%; border: none; cursor: pointer;
+        display: flex; align-items: center; justify-content: center; background: var(--secondary-background-color); color: var(--primary-text-color); }
+      .tile-icon-btn.primary { background: var(--success-color, #4caf50); color: white; }
+      .tile-icon-btn.danger { background: var(--error-color, #db4437); color: white; }
+      .tile-icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+      .tile-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px;
+        background: var(--secondary-background-color, rgba(127,127,127,0.08)); margin-top: 8px; }
+      .tile-row-icon { width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; display: flex;
+        align-items: center; justify-content: center; background: color-mix(in srgb, var(--tile-color, var(--primary-color)) 18%, transparent);
+        color: var(--tile-color, var(--primary-color)); }
+      .tile-row-label { flex: 0 0 auto; min-width: 130px; font-size: 0.88em; color: var(--primary-text-color); }
+      .tile-row-control { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+      .tile-row-control input[type="range"] { flex: 1; accent-color: var(--tile-color, var(--primary-color)); height: 6px; }
+      .tile-row-control input[type="number"],
+      .tile-row-control input[type="time"],
+      .tile-row-control input[type="text"],
+      .tile-row-control select { flex: 1; min-width: 0; padding: 6px 8px; border-radius: 10px;
+        border: 1px solid var(--divider-color, #555); background: var(--card-background-color); color: var(--primary-text-color); }
+      .tile-row-value { font-size: 0.8em; color: var(--secondary-text-color); min-width: 46px; text-align: right; flex-shrink: 0; }
+
+      .progress-bar { height: 10px; border-radius: 999px; background: var(--divider-color, #444); overflow: hidden; margin-top: 10px; }
+      .progress-fill { height: 100%; border-radius: 999px; background: var(--success-color, #4caf50); transition: width 1s linear; }
+
+      .chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+      .chip { border: 1px solid var(--divider-color, #555); background: transparent; color: var(--primary-text-color);
+        border-radius: 999px; padding: 4px 10px; font-size: 0.8em; cursor: pointer; }
+      .chip:hover { background: var(--secondary-background-color); }
+      .chip-clear { border-color: var(--warning-color, #ff9800); color: var(--warning-color, #ff9800); }
+      .chip-static { cursor: default; display: flex; align-items: center; gap: 6px; }
+      .chip-static.active { border-color: var(--success-color, #4caf50); color: var(--success-color, #4caf50); background: color-mix(in srgb, var(--success-color, #4caf50) 12%, transparent); }
+      .chip-badge { width: 16px; height: 16px; border-radius: 50%; background: var(--primary-color); color: white;
+        display: flex; align-items: center; justify-content: center; font-size: 0.65em; flex-shrink: 0; }
+
+      .switch { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
+      .switch input { opacity: 0; width: 0; height: 0; }
+      .slider-toggle { position: absolute; cursor: pointer; inset: 0; background: var(--disabled-text-color, #888);
+        border-radius: 22px; transition: 0.2s; }
+      .slider-toggle::before { content: ""; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px;
+        background: white; border-radius: 50%; transition: 0.2s; }
+      .switch input:checked + .slider-toggle { background: var(--tile-color, var(--info-color, #03a9f4)); }
+      .switch input:checked + .slider-toggle::before { transform: translateX(18px); }
+
+      .footer-note { margin-top: 10px; font-size: 0.8em; color: var(--secondary-text-color); text-align: center; }
+      .not-found { padding: 16px; color: var(--error-color); }
+      .drag-handle { cursor: grab; color: var(--secondary-text-color); flex-shrink: 0; }
+      .zone-row.drag-over { outline: 2px dashed var(--primary-color); }
+    `;
+  }
+}
+
+/* -------------------------------------------------------------------- */
+/* Status card - read-only overview                                     */
+/* -------------------------------------------------------------------- */
+
+class IrrigationSequencerStatusCard extends IrrigationSequencerBaseCard {
+  static getConfigElement() {
+    return document.createElement("irrigation-sequencer-status-card-editor");
+  }
+
+  static getStubConfig(hass) {
+    const entity = Object.keys(hass.states).find(
+      (id) => id.startsWith("sensor.") && hass.states[id].attributes?.zones !== undefined
+    );
+    return { entity: entity || "" };
+  }
+
+  getCardSize() {
+    return 4;
   }
 
   _render() {
@@ -162,48 +255,161 @@ class IrrigationSequencerCard extends HTMLElement {
     const attrs = stateObj.attributes;
     const zones = [...(attrs.zones || [])].sort((a, b) => a.position - b.position);
     const status = stateObj.state;
-    const title = this._config.title || "Irrigation";
+    const title = this._config.title || t.statusCardTitle;
+    const statusColor = STATUS_COLORS[status] || STATUS_COLORS.idle;
+    const isRunning = status === "running";
+    const isBusy = status === "running" || status === "paused_between_zones";
+
+    const factorBadge =
+      attrs.weather_adjustment_enabled && attrs.weather_current_temp != null
+        ? `<div class="chip chip-static"><ha-icon icon="mdi:weather-partly-cloudy"></ha-icon>${attrs.weather_current_temp}° · ×${attrs.weather_current_factor.toFixed(2)}</div>`
+        : "";
+
+    let body = "";
+    if (isBusy) {
+      const totalPlanned =
+        zones.reduce((sum, z) => sum + Math.round(z.duration_minutes * 60 * (attrs.weather_current_factor || 1)), 0) +
+        attrs.pause_between_zones_seconds * Math.max(0, zones.length - 1);
+      const remaining = attrs.seconds_remaining_total || 0;
+      const pct = totalPlanned > 0 ? Math.max(0, Math.min(100, 100 - (remaining / totalPlanned) * 100)) : 0;
+      const activeZone = attrs.current_zone_index != null ? zones[attrs.current_zone_index] : null;
+
+      body = `
+        <div class="tile-row" style="--tile-color: ${statusColor}">
+          <div class="tile-row-icon"><ha-icon icon="mdi:sprinkler-variant"></ha-icon></div>
+          <div class="tile-row-label" style="min-width:0; flex:1;">
+            <div class="tile-primary" style="font-size:0.95em;">${activeZone ? zoneDisplayName(this._hass, activeZone) : t.pauseBetweenZones}</div>
+            <div class="tile-secondary">${activeZone ? t.remainingZone(formatSeconds(attrs.seconds_remaining_zone)) : ""}</div>
+          </div>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%; background:${statusColor}"></div></div>
+        <div class="footer-note">${t.remainingTotal(formatSeconds(remaining))}</div>
+      `;
+    } else {
+      body = `
+        <div class="chip-row">
+          ${zones
+            .map(
+              (z, i) =>
+                `<div class="chip chip-static"><span class="chip-badge">${i + 1}</span>${zoneDisplayName(
+                  this._hass,
+                  z
+                )} · ${z.duration_minutes} min</div>`
+            )
+            .join("")}
+        </div>
+        ${factorBadge ? `<div class="chip-row">${factorBadge}</div>` : ""}
+        ${attrs.next_run ? `<div class="footer-note">${t.nextRun}: ${new Date(attrs.next_run).toLocaleString(this._hass.language)}</div>` : ""}
+      `;
+    }
 
     this.shadowRoot.innerHTML = `
-      <style>${this._styles()}</style>
+      <style>${this._sharedStyles()}</style>
       <ha-card>
-        <div class="header">
-          <div class="title">${title}</div>
-          <div class="status-pill" style="--status-color: ${STATUS_COLORS[status] || STATUS_COLORS.idle}">
-            <span class="dot"></span>${t.status[status] || status}
+        <div class="tile-header" style="--tile-color: ${statusColor}">
+          <div class="tile-icon ${isRunning ? "spraying" : ""}"><ha-icon icon="mdi:sprinkler-variant"></ha-icon></div>
+          <div class="tile-text">
+            <div class="tile-primary">${title}</div>
+            <div class="tile-secondary">${t.status[status] || status}</div>
+          </div>
+          <div class="tile-actions">
+            <button class="tile-icon-btn danger" id="stop-btn" ${status === "idle" ? "disabled" : ""} title="${t.stop}">
+              <ha-icon icon="mdi:stop"></ha-icon>
+            </button>
+            <button class="tile-icon-btn primary" id="start-btn" ${isBusy ? "disabled" : ""} title="${t.start}">
+              <ha-icon icon="mdi:play"></ha-icon>
+            </button>
           </div>
         </div>
+        ${body}
+      </ha-card>
+    `;
 
-        ${this._renderProgress(attrs, zones, status, t)}
+    this.shadowRoot.getElementById("start-btn")?.addEventListener("click", () => this._callService("start_now"));
+    this.shadowRoot.getElementById("stop-btn")?.addEventListener("click", () => this._callService("stop"));
+  }
+}
+
+/* -------------------------------------------------------------------- */
+/* Settings card - all configuration controls                           */
+/* -------------------------------------------------------------------- */
+
+class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
+  static getConfigElement() {
+    return document.createElement("irrigation-sequencer-settings-card-editor");
+  }
+
+  static getStubConfig(hass) {
+    const entity = Object.keys(hass.states).find(
+      (id) => id.startsWith("sensor.") && hass.states[id].attributes?.zones !== undefined
+    );
+    return { entity: entity || "" };
+  }
+
+  getCardSize() {
+    const zones = this._entityState()?.attributes?.zones?.length || 4;
+    return 4 + Math.ceil(zones / 2);
+  }
+
+  _render() {
+    const t = getTranslations(this._hass);
+    const stateObj = this._entityState();
+    if (!stateObj) {
+      this.shadowRoot.innerHTML = `<ha-card><div class="not-found">${t.notFound(
+        this._config.entity
+      )}</div></ha-card>`;
+      return;
+    }
+
+    const attrs = stateObj.attributes;
+    const zones = [...(attrs.zones || [])].sort((a, b) => a.position - b.position);
+    const title = this._config.title || t.settingsCardTitle;
+
+    this.shadowRoot.innerHTML = `
+      <style>${this._sharedStyles()}</style>
+      <ha-card>
+        <div class="tile-header" style="--tile-color: var(--primary-color)">
+          <div class="tile-icon"><ha-icon icon="mdi:tune-variant"></ha-icon></div>
+          <div class="tile-text">
+            <div class="tile-primary">${title}</div>
+            <div class="tile-secondary">${t.zonesLabel(zones.length)}</div>
+          </div>
+        </div>
 
         <div class="zones">
-          ${zones.map((zone, index) => this._renderZone(zone, index, attrs, status, t)).join("")}
+          ${zones.map((zone, index) => this._renderZoneRow(zone, index, t)).join("")}
         </div>
 
-        <div class="settings">
-          <div class="setting-row">
-            <ha-icon icon="mdi:timer-sand"></ha-icon>
-            <label>${t.pauseBetweenZones}</label>
+        <div class="tile-row" style="--tile-color: var(--warning-color, #ff9800)">
+          <div class="tile-row-icon"><ha-icon icon="mdi:timer-sand"></ha-icon></div>
+          <div class="tile-row-label">${t.pauseBetweenZones}</div>
+          <div class="tile-row-control">
             <input type="range" min="0" max="900" step="10" value="${attrs.pause_between_zones_seconds}" id="pause-range" />
-            <span class="value">${formatSeconds(attrs.pause_between_zones_seconds)}</span>
+            <span class="tile-row-value">${formatSeconds(attrs.pause_between_zones_seconds)}</span>
           </div>
-          <div class="setting-row">
-            <ha-icon icon="mdi:weather-night"></ha-icon>
-            <label>${t.nightStart}</label>
+        </div>
+        <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4)">
+          <div class="tile-row-icon"><ha-icon icon="mdi:weather-night"></ha-icon></div>
+          <div class="tile-row-label">${t.nightStart}</div>
+          <div class="tile-row-control">
             <input type="time" id="start-time" value="${(attrs.start_time || "05:00:00").slice(0, 5)}" step="60" />
           </div>
-          <div class="setting-row">
-            <ha-icon icon="mdi:snowflake"></ha-icon>
-            <label>${t.winterMode}</label>
+        </div>
+        <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4)">
+          <div class="tile-row-icon"><ha-icon icon="mdi:snowflake"></ha-icon></div>
+          <div class="tile-row-label">${t.winterMode}</div>
+          <div class="tile-row-control">
             <label class="switch">
               <input type="checkbox" id="winter-toggle" ${attrs.winter_mode ? "checked" : ""} />
-              <span class="slider"></span>
+              <span class="slider-toggle"></span>
             </label>
           </div>
-          <div class="setting-row rain-row">
-            <ha-icon icon="mdi:weather-rainy"></ha-icon>
-            <label>${t.rainPause}</label>
-            <div class="rain-buttons">
+        </div>
+        <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4); align-items: flex-start;">
+          <div class="tile-row-icon"><ha-icon icon="mdi:weather-rainy"></ha-icon></div>
+          <div class="tile-row-label">${t.rainPause}</div>
+          <div class="tile-row-control" style="flex-wrap: wrap;">
+            <div class="chip-row" style="margin-top:0;">
               ${[1, 3, 7, 14]
                 .map(
                   (d) => `<button class="chip" data-days="${d}">${d} ${d > 1 ? t.days : t.day}</button>`
@@ -216,64 +422,26 @@ class IrrigationSequencerCard extends HTMLElement {
               }
             </div>
           </div>
-
-          ${this._renderWeatherSection(attrs, t)}
         </div>
 
-        <div class="actions">
-          <button class="action-btn stop" id="stop-btn" ${status === "idle" ? "disabled" : ""}>
-            <ha-icon icon="mdi:stop"></ha-icon> ${t.stop}
-          </button>
-          <button class="action-btn start" id="start-btn" ${status === "running" || status === "paused_between_zones" ? "disabled" : ""}>
-            <ha-icon icon="mdi:play"></ha-icon> ${t.start}
-          </button>
-        </div>
-        ${attrs.next_run ? `<div class="next-run">${t.nextRun}: ${new Date(attrs.next_run).toLocaleString(this._hass.language)}</div>` : ""}
+        ${this._renderWeatherSection(attrs, t)}
       </ha-card>
     `;
 
     this._attachListeners(zones, t);
   }
 
-  _renderProgress(attrs, zones, status, t) {
-    if (status !== "running" && status !== "paused_between_zones") return "";
-    const factor = attrs.weather_current_factor || 1;
-    const totalPlanned =
-      zones.reduce((sum, z) => sum + Math.round(z.duration_minutes * 60 * factor), 0) +
-      attrs.pause_between_zones_seconds * Math.max(0, zones.length - 1);
-    const remaining = attrs.seconds_remaining_total || 0;
-    const pct = totalPlanned > 0 ? Math.max(0, Math.min(100, 100 - (remaining / totalPlanned) * 100)) : 0;
+  _renderZoneRow(zone, index, t) {
     return `
-      <div class="progress-wrap">
-        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-        <div class="progress-label">${t.remainingTotal(formatSeconds(remaining))}</div>
-      </div>
-    `;
-  }
-
-  _renderZone(zone, index, attrs, status, t) {
-    const isActive = attrs.current_zone_index === index && status === "running";
-    const name = this._hass ? friendlyName(this._hass, zone.entity_id) : zone.entity_id;
-    const remaining = isActive ? attrs.seconds_remaining_zone : null;
-    return `
-      <div class="zone ${isActive ? "active" : ""}" draggable="true" data-index="${index}" data-entity="${zone.entity_id}">
-        <div class="zone-drag-handle" title="${t.dragHandle}">
-          <ha-icon icon="mdi:drag-vertical"></ha-icon>
-        </div>
-        <div class="zone-badge">${index + 1}</div>
-        <div class="zone-icon ${isActive ? "spraying" : ""}">
-          <ha-icon icon="mdi:sprinkler${isActive ? "-variant" : ""}"></ha-icon>
-        </div>
-        <div class="zone-info">
-          <div class="zone-name">${name}</div>
-          ${
-            isActive
-              ? `<div class="zone-remaining">${t.remainingZone(formatSeconds(remaining))}</div>`
-              : `<div class="zone-duration-row">
-                  <input type="range" min="1" max="60" value="${zone.duration_minutes}" class="zone-duration" data-entity="${zone.entity_id}" />
-                  <span class="value">${zone.duration_minutes} min</span>
-                </div>`
-          }
+      <div class="tile-row zone-row" style="--tile-color: var(--success-color, #4caf50);" draggable="true" data-index="${index}" data-entity="${zone.entity_id}">
+        <div class="drag-handle" title="${t.dragHandle}"><ha-icon icon="mdi:drag-vertical"></ha-icon></div>
+        <div class="tile-row-icon"><ha-icon icon="mdi:sprinkler"></ha-icon></div>
+        <div class="tile-row-control" style="flex-direction: column; align-items: stretch; gap: 6px;">
+          <input type="text" class="zone-name" data-entity="${zone.entity_id}" placeholder="${t.zoneNamePlaceholder}" value="${zone.name || ""}" />
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input type="range" min="1" max="60" value="${zone.duration_minutes}" class="zone-duration" data-entity="${zone.entity_id}" />
+            <span class="tile-row-value">${zone.duration_minutes} min</span>
+          </div>
         </div>
       </div>
     `;
@@ -290,21 +458,23 @@ class IrrigationSequencerCard extends HTMLElement {
         : "";
 
     return `
-      <div class="weather-section">
-        <div class="setting-row">
-          <ha-icon icon="mdi:weather-partly-cloudy"></ha-icon>
-          <label>${t.weatherAdjustment}</label>
+      <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4)">
+        <div class="tile-row-icon"><ha-icon icon="mdi:weather-partly-cloudy"></ha-icon></div>
+        <div class="tile-row-label">${t.weatherAdjustment}</div>
+        <div class="tile-row-control">
           <label class="switch">
             <input type="checkbox" id="weather-toggle" ${enabled ? "checked" : ""} />
-            <span class="slider"></span>
+            <span class="slider-toggle"></span>
           </label>
         </div>
-        ${
-          enabled
-            ? `
-          <div class="setting-row">
-            <ha-icon icon="mdi:cloud-outline"></ha-icon>
-            <label>${t.weatherEntity}</label>
+      </div>
+      ${
+        enabled
+          ? `
+        <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4)">
+          <div class="tile-row-icon"><ha-icon icon="mdi:cloud-outline"></ha-icon></div>
+          <div class="tile-row-label">${t.weatherEntity}</div>
+          <div class="tile-row-control">
             <select id="weather-entity">
               <option value="">${t.weatherEntityNone}</option>
               ${weatherEntities
@@ -318,34 +488,31 @@ class IrrigationSequencerCard extends HTMLElement {
                 .join("")}
             </select>
           </div>
-          <div class="setting-row">
-            <ha-icon icon="mdi:thermometer-low"></ha-icon>
-            <label>${t.referenceTemp}</label>
-            <input type="number" id="weather-reference-temp" value="${attrs.weather_reference_temp}" step="0.5" />
-          </div>
-          <div class="setting-row">
-            <ha-icon icon="mdi:thermometer-high"></ha-icon>
-            <label>${t.hotTemp}</label>
-            <input type="number" id="weather-hot-temp" value="${attrs.weather_hot_temp}" step="0.5" />
-          </div>
-          <div class="setting-row">
-            <ha-icon icon="mdi:water-percent"></ha-icon>
-            <label>${t.hotFactor}</label>
-            <input type="number" id="weather-hot-factor" value="${attrs.weather_hot_factor}" step="0.1" min="0.1" max="3" />
-          </div>
-          ${currentFactorLabel ? `<div class="weather-current">${currentFactorLabel}</div>` : ""}
-          `
-            : ""
-        }
-      </div>
+        </div>
+        <div class="tile-row" style="--tile-color: var(--primary-color)">
+          <div class="tile-row-icon"><ha-icon icon="mdi:thermometer-low"></ha-icon></div>
+          <div class="tile-row-label">${t.referenceTemp}</div>
+          <div class="tile-row-control"><input type="number" id="weather-reference-temp" value="${attrs.weather_reference_temp}" step="0.5" /></div>
+        </div>
+        <div class="tile-row" style="--tile-color: var(--primary-color)">
+          <div class="tile-row-icon"><ha-icon icon="mdi:thermometer-high"></ha-icon></div>
+          <div class="tile-row-label">${t.hotTemp}</div>
+          <div class="tile-row-control"><input type="number" id="weather-hot-temp" value="${attrs.weather_hot_temp}" step="0.5" /></div>
+        </div>
+        <div class="tile-row" style="--tile-color: var(--primary-color)">
+          <div class="tile-row-icon"><ha-icon icon="mdi:water-percent"></ha-icon></div>
+          <div class="tile-row-label">${t.hotFactor}</div>
+          <div class="tile-row-control"><input type="number" id="weather-hot-factor" value="${attrs.weather_hot_factor}" step="0.1" min="0.1" max="3" /></div>
+        </div>
+        ${currentFactorLabel ? `<div class="footer-note">${currentFactorLabel}</div>` : ""}
+        `
+          : ""
+      }
     `;
   }
 
   _attachListeners(zones, t) {
     const root = this.shadowRoot;
-
-    root.getElementById("start-btn")?.addEventListener("click", () => this._callService("start_now"));
-    root.getElementById("stop-btn")?.addEventListener("click", () => this._callService("stop"));
 
     root.getElementById("winter-toggle")?.addEventListener("change", (e) => {
       const entryId = this._entityState().attributes.entry_id;
@@ -373,6 +540,15 @@ class IrrigationSequencerCard extends HTMLElement {
     });
     root.getElementById("clear-rain")?.addEventListener("click", () => {
       this._callService("clear_rain_pause", {});
+    });
+
+    root.querySelectorAll(".zone-name").forEach((input) => {
+      input.addEventListener("change", (e) => {
+        this._callService("set_zone_name", {
+          entity_id: e.target.dataset.entity,
+          name: e.target.value,
+        });
+      });
     });
 
     root.querySelectorAll(".zone-duration").forEach((input) => {
@@ -436,17 +612,8 @@ class IrrigationSequencerCard extends HTMLElement {
     });
   }
 
-  _switchEntityId(entryId, translationKey) {
-    return Object.keys(this._hass.states).find(
-      (id) =>
-        id.startsWith("switch.") &&
-        this._hass.states[id].attributes?.entry_id === entryId &&
-        id.includes(translationKey)
-    );
-  }
-
   _attachDragAndDrop(root, zones) {
-    const zoneEls = Array.from(root.querySelectorAll(".zone"));
+    const zoneEls = Array.from(root.querySelectorAll(".zone-row"));
     zoneEls.forEach((el) => {
       el.addEventListener("dragstart", (e) => {
         this._dragIndex = parseInt(el.dataset.index, 10);
@@ -461,7 +628,7 @@ class IrrigationSequencerCard extends HTMLElement {
         e.preventDefault();
         el.classList.remove("drag-over");
         const targetIndex = parseInt(el.dataset.index, 10);
-        if (this._dragIndex === null || this._dragIndex === targetIndex) return;
+        if (this._dragIndex === null || this._dragIndex === undefined || this._dragIndex === targetIndex) return;
 
         const ordered = [...zones];
         const [moved] = ordered.splice(this._dragIndex, 1);
@@ -471,81 +638,13 @@ class IrrigationSequencerCard extends HTMLElement {
       });
     });
   }
-
-  _styles() {
-    return `
-      ha-card { padding: 16px; }
-      .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-      .title { font-size: 1.2em; font-weight: 500; }
-      .status-pill { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
-        background: color-mix(in srgb, var(--status-color) 15%, transparent); color: var(--status-color);
-        font-size: 0.85em; font-weight: 500; }
-      .status-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--status-color); }
-
-      .progress-wrap { margin-bottom: 14px; }
-      .progress-bar { height: 8px; border-radius: 4px; background: var(--divider-color, #444); overflow: hidden; }
-      .progress-fill { height: 100%; background: var(--success-color, #4caf50); transition: width 1s linear; }
-      .progress-label { font-size: 0.8em; color: var(--secondary-text-color); margin-top: 4px; }
-
-      .zones { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
-      .zone { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px;
-        background: var(--secondary-background-color, rgba(127,127,127,0.08)); transition: background 0.2s, transform 0.15s; }
-      .zone.active { background: color-mix(in srgb, var(--success-color, #4caf50) 18%, transparent); }
-      .zone.drag-over { transform: scale(1.02); outline: 2px dashed var(--primary-color); }
-      .zone-drag-handle { cursor: grab; color: var(--secondary-text-color); }
-      .zone-badge { width: 22px; height: 22px; border-radius: 50%; background: var(--primary-color); color: white;
-        display: flex; align-items: center; justify-content: center; font-size: 0.75em; flex-shrink: 0; }
-      .zone-icon { color: var(--secondary-text-color); }
-      .zone-icon.spraying { color: var(--success-color, #4caf50); animation: pulse 1s ease-in-out infinite; }
-      @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.15); } }
-      .zone-info { flex: 1; min-width: 0; }
-      .zone-name { font-weight: 500; font-size: 0.95em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .zone-remaining { font-size: 0.8em; color: var(--success-color, #4caf50); }
-      .zone-duration-row { display: flex; align-items: center; gap: 8px; }
-      .zone-duration-row input[type="range"] { flex: 1; }
-      .zone-duration-row .value { font-size: 0.8em; color: var(--secondary-text-color); min-width: 46px; text-align: right; }
-
-      .settings { display: flex; flex-direction: column; gap: 10px; padding-top: 8px;
-        border-top: 1px solid var(--divider-color, rgba(127,127,127,0.2)); margin-bottom: 12px; }
-      .setting-row { display: flex; align-items: center; gap: 10px; font-size: 0.9em; }
-      .setting-row label { flex: 0 0 auto; min-width: 150px; color: var(--secondary-text-color); }
-      .setting-row input[type="range"] { flex: 1; }
-      .setting-row input[type="number"], .setting-row select { flex: 1; padding: 4px 6px; border-radius: 6px;
-        border: 1px solid var(--divider-color, #555); background: var(--card-background-color); color: var(--primary-text-color); }
-      .setting-row .value { min-width: 60px; text-align: right; font-size: 0.85em; }
-      .rain-row { align-items: flex-start; }
-      .rain-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
-      .chip { border: 1px solid var(--divider-color, #555); background: transparent; color: var(--primary-text-color);
-        border-radius: 999px; padding: 4px 10px; font-size: 0.8em; cursor: pointer; }
-      .chip:hover { background: var(--secondary-background-color); }
-      .chip-clear { border-color: var(--warning-color, #ff9800); color: var(--warning-color, #ff9800); }
-
-      .weather-section { display: flex; flex-direction: column; gap: 10px; padding-top: 8px;
-        border-top: 1px dashed var(--divider-color, rgba(127,127,127,0.2)); }
-      .weather-current { font-size: 0.8em; color: var(--success-color, #4caf50); padding-left: 34px; }
-
-      .switch { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
-      .switch input { opacity: 0; width: 0; height: 0; }
-      .slider { position: absolute; cursor: pointer; inset: 0; background: var(--disabled-text-color, #888);
-        border-radius: 22px; transition: 0.2s; }
-      .slider::before { content: ""; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px;
-        background: white; border-radius: 50%; transition: 0.2s; }
-      .switch input:checked + .slider { background: var(--info-color, #03a9f4); }
-      .switch input:checked + .slider::before { transform: translateX(18px); }
-
-      .actions { display: flex; gap: 10px; }
-      .action-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
-        padding: 10px; border-radius: 10px; border: none; font-weight: 500; cursor: pointer; }
-      .action-btn.start { background: var(--success-color, #4caf50); color: white; }
-      .action-btn.stop { background: var(--error-color, #db4437); color: white; }
-      .action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-      .next-run { margin-top: 10px; font-size: 0.8em; color: var(--secondary-text-color); text-align: center; }
-      .not-found { padding: 16px; color: var(--error-color); }
-    `;
-  }
 }
 
-class IrrigationSequencerCardEditor extends HTMLElement {
+/* -------------------------------------------------------------------- */
+/* Card editors (visual config UI)                                      */
+/* -------------------------------------------------------------------- */
+
+class IrrigationSequencerCardEditorBase extends HTMLElement {
   setConfig(config) {
     this._config = config;
     this._render();
@@ -602,12 +701,24 @@ class IrrigationSequencerCardEditor extends HTMLElement {
   }
 }
 
-customElements.define("irrigation-sequencer-card", IrrigationSequencerCard);
-customElements.define("irrigation-sequencer-card-editor", IrrigationSequencerCardEditor);
+class IrrigationSequencerStatusCardEditor extends IrrigationSequencerCardEditorBase {}
+class IrrigationSequencerSettingsCardEditor extends IrrigationSequencerCardEditorBase {}
+
+customElements.define("irrigation-sequencer-status-card", IrrigationSequencerStatusCard);
+customElements.define("irrigation-sequencer-settings-card", IrrigationSequencerSettingsCard);
+customElements.define("irrigation-sequencer-status-card-editor", IrrigationSequencerStatusCardEditor);
+customElements.define("irrigation-sequencer-settings-card-editor", IrrigationSequencerSettingsCardEditor);
 
 window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "irrigation-sequencer-card",
-  name: "Irrigation Sequencer Card",
-  description: "Graphical control for the Irrigation Sequencer irrigation sequence.",
-});
+window.customCards.push(
+  {
+    type: "irrigation-sequencer-status-card",
+    name: "Irrigation Sequencer - Status",
+    description: "Read-only status overview: active zone, progress and next run.",
+  },
+  {
+    type: "irrigation-sequencer-settings-card",
+    name: "Irrigation Sequencer - Settings",
+    description: "All configuration controls: zone names, order, duration, schedule, winter mode, rain pause, weather adjustment.",
+  }
+);

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Irrigation Sequencer Card - Demo</title>
+<title>Irrigation Sequencer Cards - Demo</title>
 <style>
   :root {
     --primary-color: #03a9f4;
@@ -27,7 +27,7 @@
     display: flex;
     justify-content: center;
   }
-  .frame { width: 420px; }
+  .frame { width: 420px; display: flex; flex-direction: column; gap: 16px; }
 
   /* Minimal ha-card polyfill so the card looks right outside a real HA frontend */
   ha-card {
@@ -52,7 +52,8 @@
 </head>
 <body>
   <div class="frame">
-    <irrigation-sequencer-card id="card"></irrigation-sequencer-card>
+    <irrigation-sequencer-status-card id="status-card"></irrigation-sequencer-status-card>
+    <irrigation-sequencer-settings-card id="settings-card"></irrigation-sequencer-settings-card>
   </div>
 
   <script>
@@ -72,6 +73,7 @@
       "mdi:water-percent": "💧",
       "mdi:play": "▶️",
       "mdi:stop": "⏹️",
+      "mdi:tune-variant": "🎛️",
     };
     class HaIcon extends HTMLElement {
       static get observedAttributes() { return ["icon"]; }
@@ -101,43 +103,53 @@
     const scenario = params.get("scenario") || "idle";
     const lang = params.get("lang") || "en";
 
-    const zoneNames_en = ["Front lawn", "Back lawn", "Flower beds", "Vegetable garden", "Hedge"];
-    const zoneNames_de = ["Vorgarten", "Rasen hinten", "Blumenbeete", "Gemüsegarten", "Hecke"];
-    const zoneNames = lang === "de" ? zoneNames_de : zoneNames_en;
+    // A couple of zones get a custom name (the "name" field) to demonstrate
+    // that it overrides the underlying entity's friendly_name; the rest
+    // fall back to the entity name.
+    const zoneEntityNames_en = ["Sprinkler relay 1", "Sprinkler relay 2", "Sprinkler relay 3", "Sprinkler relay 4", "Sprinkler relay 5"];
+    const zoneEntityNames_de = ["Sprinkler-Relais 1", "Sprinkler-Relais 2", "Sprinkler-Relais 3", "Sprinkler-Relais 4", "Sprinkler-Relais 5"];
+    const zoneCustomNames_en = ["Front lawn", "Back lawn", "", "Vegetable garden", ""];
+    const zoneCustomNames_de = ["Vorgarten", "Rasen hinten", "", "Gemüsegarten", ""];
 
-    const zoneEntities = zoneNames.map((_, i) => `switch.zone_${i + 1}`);
+    const entityNames = lang === "de" ? zoneEntityNames_de : zoneEntityNames_en;
+    const customNames = lang === "de" ? zoneCustomNames_de : zoneCustomNames_en;
+
+    const zoneEntities = entityNames.map((_, i) => `switch.zone_${i + 1}`);
     const zones = zoneEntities.map((entity_id, i) => ({
       entity_id,
+      name: customNames[i],
       duration_minutes: [12, 8, 15, 10, 6][i],
       position: i,
     }));
 
     const isRunning = scenario === "running";
 
+    const statusAttrs = {
+      entry_id: "demo_entry",
+      zones,
+      pause_between_zones_seconds: 120,
+      start_time: "05:00:00",
+      winter_mode: false,
+      rain_pause_until: null,
+      current_zone_index: isRunning ? 2 : null,
+      current_zone_entity_id: isRunning ? "switch.zone_3" : null,
+      seconds_remaining_zone: isRunning ? 320 : 0,
+      seconds_remaining_total: isRunning ? 940 : 0,
+      next_run: "2026-07-19T05:00:00+02:00",
+      weather_adjustment_enabled: true,
+      weather_entity: "weather.home",
+      weather_reference_temp: 20,
+      weather_hot_temp: 30,
+      weather_hot_factor: 2.0,
+      weather_current_temp: 27,
+      weather_current_factor: 1.7,
+    };
+
     const states = {
       "sensor.lawn_irrigation_status": {
         entity_id: "sensor.lawn_irrigation_status",
         state: isRunning ? "running" : "idle",
-        attributes: {
-          entry_id: "demo_entry",
-          zones,
-          pause_between_zones_seconds: 120,
-          start_time: "05:00:00",
-          winter_mode: false,
-          rain_pause_until: null,
-          current_zone_index: isRunning ? 2 : null,
-          current_zone_entity_id: isRunning ? "switch.zone_3" : null,
-          seconds_remaining_zone: isRunning ? 320 : 0,
-          seconds_remaining_total: isRunning ? 940 : 0,
-          next_run: "2026-07-19T05:00:00+02:00",
-          weather_adjustment_enabled: true,
-          weather_entity: "weather.home",
-          weather_reference_temp: 20,
-          weather_hot_temp: 30,
-          weather_hot_factor: 2.0,
-          weather_current_temp: 27,
-          weather_current_factor: 1.7,
-        },
+        attributes: statusAttrs,
       },
       "weather.home": {
         entity_id: "weather.home",
@@ -147,7 +159,7 @@
     };
 
     zoneEntities.forEach((id, i) => {
-      states[id] = { entity_id: id, state: "off", attributes: { friendly_name: zoneNames[i] } };
+      states[id] = { entity_id: id, state: "off", attributes: { friendly_name: entityNames[i] } };
     });
 
     const hass = {
@@ -157,12 +169,16 @@
       callService: () => {},
     };
 
-    const card = document.getElementById("card");
-    card.setConfig({
-      entity: "sensor.lawn_irrigation_status",
-      title: lang === "de" ? "Rasenbewässerung" : "Lawn Irrigation",
-    });
-    card.hass = hass;
+    const statusTitle = lang === "de" ? "Rasenbewässerung" : "Lawn Irrigation";
+    const settingsTitle = lang === "de" ? "Bewässerung – Einstellungen" : "Lawn Irrigation – Settings";
+
+    const statusCard = document.getElementById("status-card");
+    statusCard.setConfig({ entity: "sensor.lawn_irrigation_status", title: statusTitle });
+    statusCard.hass = hass;
+
+    const settingsCard = document.getElementById("settings-card");
+    settingsCard.setConfig({ entity: "sensor.lawn_irrigation_status", title: settingsTitle });
+    settingsCard.hass = hass;
   </script>
 </body>
 </html>
