@@ -62,6 +62,9 @@ class IrrigationSequencerManager:
 
         self.status: str = STATE_IDLE
         self.current_zone_index: int | None = None
+        # Unlike current_zone_index, this stays set through the pause after a
+        # zone (current_zone_index is None while paused) so the UI can still
+        # tell which zone just finished.
         self.last_zone_index: int | None = None
         self.seconds_remaining_zone: int = 0
         self.seconds_remaining_total: int = 0
@@ -279,6 +282,9 @@ class IrrigationSequencerManager:
             pause_until = date.fromisoformat(self.rain_pause_until)
             if date.today() < pause_until:
                 return True, STATE_RAIN_PAUSE
+            # Rain pause has expired: clear it lazily here instead of
+            # scheduling a separate timer, since this is checked on every
+            # start attempt and status read anyway.
             self.rain_pause_until = None
             self.hass.async_create_task(self._async_save())
         return False, None
@@ -346,6 +352,9 @@ class IrrigationSequencerManager:
                 self._notify_listeners()
 
                 await self._async_set_valve(zone["entity_id"], True)
+                # Tick once per second (instead of a single asyncio.sleep for
+                # the whole duration) so the countdown attributes stay live
+                # for the sensor/card and a stop request is picked up quickly.
                 for _ in range(duration_seconds):
                     if self._stop_requested:
                         break
