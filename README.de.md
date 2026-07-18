@@ -5,7 +5,7 @@
 Mehrzonen-Bewässerungssteuerung für Home Assistant mit zwei grafischen
 Lovelace-Cards im Stil der nativen Home-Assistant-Tile-Cards.
 
-Steuert 2 bis 10 Ventile bzw. Steckdosen nacheinander in einer frei
+Steuert 1 bis 10 Ventile bzw. Steckdosen nacheinander in einer frei
 konfigurierbaren Reihenfolge – jede Zone kann einen eigenen Namen, eine
 eigene Position und Dauer haben – inklusive Pausen zwischen den Zonen,
 nächtlichem Start, Wintermodus, manueller Regen-Pause und optionaler
@@ -55,7 +55,9 @@ im Browser ausprobieren kannst.*
 Die Integration steuert vorhandene `switch`- oder `valve`-Entitäten (z. B.
 Shelly-Relais, smarte Steckdosen, native HA-Ventile). Sie bringt selbst keine
 Hardware-Anbindung mit – lege deine Ventile/Steckdosen vorher wie gewohnt in
-Home Assistant an.
+Home Assistant an. `light`-Entitäten werden ebenfalls akzeptiert, rein zum
+einfacheren Testen (z. B. eine Lampe, wenn gerade kein echtes Ventil zur Hand
+ist) – siehe [Issue #4](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/4).
 
 ## Installation über HACS
 
@@ -67,7 +69,7 @@ Home Assistant an.
 3. Home Assistant neu starten
 4. **Einstellungen → Geräte & Dienste → Integration hinzufügen** →
    "Irrigation Sequencer" suchen
-5. Im Einrichtungsdialog 2 bis 10 Ventil-/Steckdosen-Entitäten auswählen
+5. Im Einrichtungsdialog 1 bis 10 Ventil-/Steckdosen-Entitäten auswählen
 
 ## Manuelle Installation
 
@@ -112,7 +114,7 @@ Nur die *anfängliche* Zonen-Auswahl ist ein klassischer "Einrichtungsdialog"
 
 - **Zonen (Ventile hinzufügen/entfernen)**: unter **Einstellungen → Geräte &
   Dienste → Irrigation Sequencer → Konfigurieren** öffnet sich ein
-  Optionen-Dialog, in dem du die 2–10 Ventil-/Steckdosen-Entitäten jederzeit
+  Optionen-Dialog, in dem du die 1–10 Ventil-/Steckdosen-Entitäten jederzeit
   neu auswählen kannst. Zonen, die ausgewählt bleiben, behalten ihren Namen,
   ihre Dauer und Position; neu hinzugefügte Zonen bekommen Standardwerte.
 - **Zonen-Namen, -Reihenfolge, -Dauer, Wintermodus, Regen-Pause, Nachtstart,

@@ -5,7 +5,7 @@
 Multi-zone irrigation control for Home Assistant with two graphical Lovelace
 cards, styled after Home Assistant's native Tile cards.
 
-Controls 2 to 10 valves or smart plugs in a freely configurable sequence -
+Controls 1 to 10 valves or smart plugs in a freely configurable sequence -
 each zone can have its own custom name, order and duration - including
 pauses between zones, a nightly start time, a winter mode, a manual rain
 pause, and an optional weather-based duration adjustment.
@@ -52,7 +52,9 @@ Home Assistant instance.*
 The integration controls existing `switch` or `valve` entities (e.g. Shelly
 relays, smart plugs, native HA valves). It does not provide any hardware
 integration itself - set up your valves/plugs in Home Assistant as usual
-first.
+first. `light` entities are also accepted, purely for testing convenience
+(e.g. a lamp when you don't have a real valve handy) - see
+[issue #4](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/4).
 
 ## Installation via HACS
 
@@ -64,7 +66,7 @@ first.
 3. Restart Home Assistant
 4. **Settings → Devices & Services → Add Integration** → search for
    "Irrigation Sequencer"
-5. In the setup dialog, select 2 to 10 valve/plug entities
+5. In the setup dialog, select 1 to 10 valve/plug entities
 
 ## Manual installation
 
@@ -109,7 +111,7 @@ else is a live setting, not a one-time config step:
 
 - **Zones (add/remove valves)**: go to **Settings → Devices & Services →
   Irrigation Sequencer → Configure**. This opens an options dialog where you
-  can re-select the 2-10 valve/plug entities at any time. Zones that stay
+  can re-select the 1-10 valve/plug entities at any time. Zones that stay
   selected keep their configured name, duration and position; newly added
   zones get default values.
 - **Zone names, order, durations, winter mode, rain pause, night start, pause

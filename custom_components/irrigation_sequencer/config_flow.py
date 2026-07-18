@@ -1,4 +1,4 @@
-"""Config flow: select the irrigation zones (2-10 valves/smart plugs).
+"""Config flow: select the irrigation zones (1-10 valves/smart plugs).
 
 Also provides an options flow so the zone selection can be changed later via
 Settings -> Devices & Services -> Irrigation Sequencer -> Configure. All
