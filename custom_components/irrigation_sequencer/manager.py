@@ -62,6 +62,7 @@ class IrrigationSequencerManager:
 
         self.status: str = STATE_IDLE
         self.current_zone_index: int | None = None
+        self.last_zone_index: int | None = None
         self.seconds_remaining_zone: int = 0
         self.seconds_remaining_total: int = 0
 
@@ -338,6 +339,7 @@ class IrrigationSequencerManager:
                     break
 
                 self.current_zone_index = index
+                self.last_zone_index = index
                 self.status = STATE_RUNNING
                 duration_seconds = self._zone_duration_seconds(zone)
                 self.seconds_remaining_zone = duration_seconds
@@ -373,6 +375,7 @@ class IrrigationSequencerManager:
                 await self._async_set_valve(zone["entity_id"], False)
             self.status = STATE_IDLE
             self.current_zone_index = None
+            self.last_zone_index = None
             self.seconds_remaining_zone = 0
             self.seconds_remaining_total = 0
             self._stop_requested = False

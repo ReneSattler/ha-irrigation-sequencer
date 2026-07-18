@@ -19,9 +19,16 @@ Home Assistant instance.*
 
 ## Features
 
-- **Two cards**: a read-only **status card** (active zone, progress, next
-  run) and a **settings card** (everything configurable), so you can place
-  the status on an overview dashboard and keep the settings elsewhere
+- **Two cards**: a read-only **status card** (schedule timeline, active
+  zone, weather factor, next run) and a **settings card** (everything
+  configurable), so you can place the status on an overview dashboard and
+  keep the settings elsewhere
+- **Visual schedule timeline** - all zones and pauses shown as one
+  proportional bar, colored by done/active/upcoming, so you can see at a
+  glance which valve is running, for how long, and where the pauses are
+- **Horizontal or vertical layout** - both cards have a `layout` option
+  (also selectable in the visual editor) to switch between a tall, narrow
+  arrangement and a wide, short one for wide dashboard columns
 - **Custom zone names** - give each valve/plug its own display name,
   independent of the underlying entity name
 - **Sequential order** - each zone is irrigated one after another; the order
@@ -36,7 +43,9 @@ Home Assistant instance.*
   duration by a factor derived from the current outside temperature, linearly
   interpolated between two reference points. Example with the defaults
   (factor 1.0 at 20 °C, factor 2.0 at 30 °C): at 25 °C the factor is 1.5, so a
-  5-minute zone runs for 7.5 minutes.
+  5-minute zone runs for 7.5 minutes. The status card also shows today's
+  forecast high (when the weather entity provides one) and the factor it
+  would result in, so you can see tomorrow's plan at a glance.
 
 ## Requirements
 
@@ -86,6 +95,12 @@ type: custom:irrigation-sequencer-settings-card
 entity: sensor.lawn_irrigation_status
 title: Lawn irrigation settings
 ```
+
+Add `layout: horizontal` to either card's config (or pick it in the visual
+editor) for a wider, shorter arrangement - handy in a wide dashboard column
+or grid section:
+
+![Irrigation Sequencer cards - horizontal layout](screenshots/cards-horizontal-en.png)
 
 ## Changing the configuration later
 
