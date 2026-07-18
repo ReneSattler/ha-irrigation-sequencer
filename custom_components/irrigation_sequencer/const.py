@@ -13,6 +13,14 @@ DEFAULT_START_TIME = "05:00:00"
 MIN_ZONES = 1
 MAX_ZONES = 10
 
+# Default value for the config flow's free-text "name" field, picked by the
+# instance's configured language (schema defaults are static, unlike
+# strings.json translations). Extend as more languages are added.
+DEFAULT_NAME_BY_LANGUAGE = {
+    "en": "Lawn Irrigation",
+    "de": "Rasenbewässerung",
+}
+
 MIN_RAIN_PAUSE_DAYS = 1
 MAX_RAIN_PAUSE_DAYS = 14
 
