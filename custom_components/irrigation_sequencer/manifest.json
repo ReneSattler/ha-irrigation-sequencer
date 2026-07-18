@@ -1,0 +1,12 @@
+{
+  "domain": "irrigation_sequencer",
+  "name": "Irrigation Sequencer",
+  "codeowners": ["@ReneSattler"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/ReneSattler/ha-irrigation-sequencer",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/ReneSattler/ha-irrigation-sequencer/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

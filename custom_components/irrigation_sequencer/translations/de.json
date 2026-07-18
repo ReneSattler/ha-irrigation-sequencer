@@ -1,0 +1,104 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Irrigation Sequencer einrichten",
+        "description": "Wähle 2 bis 10 Ventile oder Steckdosen aus, die als Bewässerungszonen gesteuert werden sollen.",
+        "data": {
+          "name": "Name",
+          "zone_entities": "Zonen (Ventile/Steckdosen)"
+        }
+      }
+    },
+    "error": {
+      "too_few_zones": "Es müssen mindestens 2 Zonen ausgewählt werden.",
+      "too_many_zones": "Es können maximal 10 Zonen ausgewählt werden."
+    },
+    "abort": {
+      "already_configured": "Diese Konfiguration existiert bereits."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Zonen neu konfigurieren",
+        "description": "Wähle 2 bis 10 Ventile oder Steckdosen aus, die als Bewässerungszonen gesteuert werden sollen. Dauer und Reihenfolge bleiben für weiterhin ausgewählte Zonen erhalten.",
+        "data": {
+          "zone_entities": "Zonen (Ventile/Steckdosen)"
+        }
+      }
+    },
+    "error": {
+      "too_few_zones": "Es müssen mindestens 2 Zonen ausgewählt werden.",
+      "too_many_zones": "Es können maximal 10 Zonen ausgewählt werden."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "idle": "Bereit",
+          "running": "Bewässerung läuft",
+          "paused_between_zones": "Pause zwischen Zonen",
+          "winter_mode": "Wintermodus",
+          "rain_pause": "Regen-Pause"
+        }
+      }
+    },
+    "switch": {
+      "winter_mode": {
+        "name": "Wintermodus"
+      },
+      "weather_adjustment": {
+        "name": "Wetterbasierte Dauer-Anpassung"
+      }
+    },
+    "button": {
+      "start_now": {
+        "name": "Jetzt starten"
+      },
+      "stop": {
+        "name": "Stoppen"
+      }
+    }
+  },
+  "services": {
+    "set_zone_order": {
+      "name": "Zonen-Reihenfolge setzen",
+      "description": "Legt die Bewässerungs-Reihenfolge der Zonen fest."
+    },
+    "set_zone_duration": {
+      "name": "Zonen-Dauer setzen",
+      "description": "Legt fest, wie lange eine einzelne Zone bewässert wird."
+    },
+    "set_pause_between_zones": {
+      "name": "Pause zwischen Zonen setzen",
+      "description": "Legt die Pause zwischen zwei Bewässerungszonen fest."
+    },
+    "set_start_time": {
+      "name": "Startzeit setzen",
+      "description": "Legt die tägliche (nächtliche) Startzeit der Sequenz fest."
+    },
+    "set_rain_pause": {
+      "name": "Regen-Pause setzen",
+      "description": "Setzt die Bewässerung für 1-14 Tage aus (z. B. nach Regen)."
+    },
+    "clear_rain_pause": {
+      "name": "Regen-Pause aufheben",
+      "description": "Beendet eine laufende Regen-Pause sofort."
+    },
+    "set_weather_adjustment": {
+      "name": "Wetter-Anpassung setzen",
+      "description": "Konfiguriert die temperaturabhängige Dauer-Anpassung. Die Dauer jeder Zone wird mit einem Faktor multipliziert, der linear aus der aktuellen Temperatur der gewählten Wetter-Entität berechnet wird: Faktor 1.0 bei reference_temp, hot_factor bei hot_temp."
+    },
+    "start_now": {
+      "name": "Sequenz jetzt starten",
+      "description": "Startet die Bewässerungssequenz sofort manuell."
+    },
+    "stop": {
+      "name": "Sequenz stoppen",
+      "description": "Bricht eine laufende Bewässerungssequenz sofort ab."
+    }
+  }
+}

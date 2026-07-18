@@ -1,0 +1,66 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Irrigation Sequencer",
+        "description": "Choose 2 to 10 valves or smart plugs to control as irrigation zones.",
+        "data": {
+          "name": "Name",
+          "zone_entities": "Zones (valves/plugs)"
+        }
+      }
+    },
+    "error": {
+      "too_few_zones": "At least 2 zones must be selected.",
+      "too_many_zones": "A maximum of 10 zones can be selected."
+    },
+    "abort": {
+      "already_configured": "This configuration already exists."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Reconfigure zones",
+        "description": "Choose 2 to 10 valves or smart plugs to control as irrigation zones. Per-zone duration and the sequence order are kept for zones that stay selected.",
+        "data": {
+          "zone_entities": "Zones (valves/plugs)"
+        }
+      }
+    },
+    "error": {
+      "too_few_zones": "At least 2 zones must be selected.",
+      "too_many_zones": "A maximum of 10 zones can be selected."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "idle": "Idle",
+          "running": "Irrigating",
+          "paused_between_zones": "Pause between zones",
+          "winter_mode": "Winter mode",
+          "rain_pause": "Rain pause"
+        }
+      }
+    },
+    "switch": {
+      "winter_mode": {
+        "name": "Winter mode"
+      },
+      "weather_adjustment": {
+        "name": "Weather-based duration adjustment"
+      }
+    },
+    "button": {
+      "start_now": {
+        "name": "Start now"
+      },
+      "stop": {
+        "name": "Stop"
+      }
+    }
+  }
+}
