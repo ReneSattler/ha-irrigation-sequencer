@@ -5,6 +5,13 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.3.0] - 2026-07-18
+
+- Integration icon/logo (bundled `icon.png`/`icon@2x.png`/`logo.png`/`logo@2x.png`)
+- Config flow's default entry name now follows the Home Assistant instance
+  language (e.g. "Rasenbewässerung" on a German instance) instead of always
+  defaulting to English
+
 ## [0.2.0] - 2026-07-18
 
 Initial tagged version, still under active testing on real hardware.

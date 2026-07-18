@@ -20,7 +20,15 @@ from homeassistant.helpers.selector import (
     TextSelector,
 )
 
-from .const import CONF_ZONE_ENTITIES, DOMAIN, MAX_ZONES, MIN_ZONES
+from .const import CONF_ZONE_ENTITIES, DEFAULT_NAME_BY_LANGUAGE, DOMAIN, MAX_ZONES, MIN_ZONES
+
+
+def _default_name(language: str | None) -> str:
+    """Localized default for the "name" field - HA's config flow schema
+    defaults are static, so this is resolved once per form render from the
+    instance's configured language rather than translated via strings.json."""
+    lang = (language or "en").split("-")[0]
+    return DEFAULT_NAME_BY_LANGUAGE.get(lang, DEFAULT_NAME_BY_LANGUAGE["en"])
 
 
 class IrrigationSequencerConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -49,7 +57,9 @@ class IrrigationSequencerConfigFlow(ConfigFlow, domain=DOMAIN):
 
         schema = vol.Schema(
             {
-                vol.Required("name", default="Lawn Irrigation"): TextSelector(),
+                vol.Required(
+                    "name", default=_default_name(self.hass.config.language)
+                ): TextSelector(),
                 vol.Required(CONF_ZONE_ENTITIES): EntitySelector(
                     EntitySelectorConfig(domain=["valve", "switch", "light"], multiple=True)
                 ),
