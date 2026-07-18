@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Irrigation Sequencer einrichten",
-        "description": "Wähle 2 bis 10 Ventile oder Steckdosen aus, die als Bewässerungszonen gesteuert werden sollen.",
+        "description": "Wähle 1 bis 10 Ventile oder Steckdosen aus, die als Bewässerungszonen gesteuert werden sollen.",
         "data": {
           "name": "Name",
           "zone_entities": "Zonen (Ventile/Steckdosen)"
@@ -11,7 +11,7 @@
       }
     },
     "error": {
-      "too_few_zones": "Es müssen mindestens 2 Zonen ausgewählt werden.",
+      "too_few_zones": "Es muss mindestens 1 Zone ausgewählt werden.",
       "too_many_zones": "Es können maximal 10 Zonen ausgewählt werden."
     },
     "abort": {
@@ -22,14 +22,14 @@
     "step": {
       "init": {
         "title": "Zonen neu konfigurieren",
-        "description": "Wähle 2 bis 10 Ventile oder Steckdosen aus, die als Bewässerungszonen gesteuert werden sollen. Dauer und Reihenfolge bleiben für weiterhin ausgewählte Zonen erhalten.",
+        "description": "Wähle 1 bis 10 Ventile oder Steckdosen aus, die als Bewässerungszonen gesteuert werden sollen. Dauer und Reihenfolge bleiben für weiterhin ausgewählte Zonen erhalten.",
         "data": {
           "zone_entities": "Zonen (Ventile/Steckdosen)"
         }
       }
     },
     "error": {
-      "too_few_zones": "Es müssen mindestens 2 Zonen ausgewählt werden.",
+      "too_few_zones": "Es muss mindestens 1 Zone ausgewählt werden.",
       "too_many_zones": "Es können maximal 10 Zonen ausgewählt werden."
     }
   },

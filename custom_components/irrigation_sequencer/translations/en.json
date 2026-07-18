@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Set up Irrigation Sequencer",
-        "description": "Choose 2 to 10 valves or smart plugs to control as irrigation zones.",
+        "description": "Choose 1 to 10 valves or smart plugs to control as irrigation zones.",
         "data": {
           "name": "Name",
           "zone_entities": "Zones (valves/plugs)"
@@ -11,7 +11,7 @@
       }
     },
     "error": {
-      "too_few_zones": "At least 2 zones must be selected.",
+      "too_few_zones": "At least 1 zone must be selected.",
       "too_many_zones": "A maximum of 10 zones can be selected."
     },
     "abort": {
@@ -22,14 +22,14 @@
     "step": {
       "init": {
         "title": "Reconfigure zones",
-        "description": "Choose 2 to 10 valves or smart plugs to control as irrigation zones. Per-zone duration and the sequence order are kept for zones that stay selected.",
+        "description": "Choose 1 to 10 valves or smart plugs to control as irrigation zones. Per-zone duration and the sequence order are kept for zones that stay selected.",
         "data": {
           "zone_entities": "Zones (valves/plugs)"
         }
       }
     },
     "error": {
-      "too_few_zones": "At least 2 zones must be selected.",
+      "too_few_zones": "At least 1 zone must be selected.",
       "too_many_zones": "A maximum of 10 zones can be selected."
     }
   },
