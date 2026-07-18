@@ -20,10 +20,17 @@ im Browser ausprobieren kannst.*
 
 ## Funktionen
 
-- **Zwei Cards**: eine reine **Status-Card** (aktive Zone, Fortschritt,
-  nächster Lauf) und eine **Settings-Card** (alle Einstellungen) – so kannst
-  du den Status z. B. auf einem Übersichts-Dashboard zeigen und die
-  Einstellungen woanders unterbringen
+- **Zwei Cards**: eine reine **Status-Card** (Zeitleiste, aktive Zone,
+  Wetter-Faktor, nächster Lauf) und eine **Settings-Card** (alle
+  Einstellungen) – so kannst du den Status z. B. auf einem
+  Übersichts-Dashboard zeigen und die Einstellungen woanders unterbringen
+- **Visuelle Zeitleiste** – alle Zonen und Pausen als ein proportionaler
+  Balken, eingefärbt nach fertig/aktiv/kommend – auf einen Blick sichtbar,
+  welches Ventil gerade arbeitet, wie lange und wo die Pausen liegen
+- **Horizontales oder vertikales Layout** – beide Cards haben eine
+  `layout`-Option (auch im visuellen Editor wählbar), um zwischen einer
+  hohen, schmalen und einer breiten, kurzen Anordnung zu wechseln – praktisch
+  für breite Dashboard-Spalten
 - **Eigene Zonen-Namen** – jedes Ventil/jede Steckdose kann einen eigenen
   Anzeigenamen bekommen, unabhängig vom Namen der zugrunde liegenden Entität
 - **Sequenz mit fester Reihenfolge** – jede Zone wird nacheinander bewässert,
@@ -38,7 +45,10 @@ im Browser ausprobieren kannst.*
   Faktor multiplizieren, der aus der aktuellen Außentemperatur berechnet wird,
   linear interpoliert zwischen zwei Referenzpunkten. Beispiel mit den
   Standardwerten (Faktor 1.0 bei 20 °C, Faktor 2.0 bei 30 °C): bei 25 °C ist
-  der Faktor 1.5 – eine 5-minütige Zone läuft dann 7,5 Minuten.
+  der Faktor 1.5 – eine 5-minütige Zone läuft dann 7,5 Minuten. Die
+  Status-Card zeigt zusätzlich die Tageshöchsttemperatur laut Prognose (sofern
+  die Wetter-Entität eine liefert) und den daraus resultierenden Faktor – so
+  siehst du schon vorab, wie der nächste Lauf ausfallen würde.
 
 ## Voraussetzungen
 
@@ -88,6 +98,12 @@ type: custom:irrigation-sequencer-settings-card
 entity: sensor.rasenbewasserung_status
 title: Rasenbewässerung – Einstellungen
 ```
+
+Mit `layout: horizontal` in der Konfiguration einer Card (oder Auswahl im
+visuellen Editor) gibt es eine breitere, kürzere Anordnung – praktisch für
+eine breite Dashboard-Spalte oder Grid-Sektion:
+
+![Irrigation Sequencer Cards – horizontales Layout](screenshots/cards-horizontal-en.png)
 
 ## Konfiguration später ändern
 

@@ -28,6 +28,7 @@
     justify-content: center;
   }
   .frame { width: 420px; display: flex; flex-direction: column; gap: 16px; }
+  .frame.wide { width: 640px; }
 
   /* Minimal ha-card polyfill so the card looks right outside a real HA frontend */
   ha-card {
@@ -74,6 +75,7 @@
       "mdi:play": "▶️",
       "mdi:stop": "⏹️",
       "mdi:tune-variant": "🎛️",
+      "mdi:calendar-clock": "📅",
     };
     class HaIcon extends HTMLElement {
       static get observedAttributes() { return ["icon"]; }
@@ -102,6 +104,8 @@
     const params = new URLSearchParams(location.search);
     const scenario = params.get("scenario") || "idle";
     const lang = params.get("lang") || "en";
+    const layout = params.get("layout") || "vertical";
+    if (layout === "horizontal") document.querySelector(".frame").classList.add("wide");
 
     // A couple of zones get a custom name (the "name" field) to demonstrate
     // that it overrides the underlying entity's friendly_name; the rest
@@ -132,6 +136,7 @@
       winter_mode: false,
       rain_pause_until: null,
       current_zone_index: isRunning ? 2 : null,
+      last_zone_index: isRunning ? 2 : null,
       current_zone_entity_id: isRunning ? "switch.zone_3" : null,
       seconds_remaining_zone: isRunning ? 320 : 0,
       seconds_remaining_total: isRunning ? 940 : 0,
@@ -154,7 +159,11 @@
       "weather.home": {
         entity_id: "weather.home",
         state: "sunny",
-        attributes: { friendly_name: lang === "de" ? "Zuhause" : "Home", temperature: 27 },
+        attributes: {
+          friendly_name: lang === "de" ? "Zuhause" : "Home",
+          temperature: 27,
+          forecast: [{ temperature: 31, templow: 18, condition: "sunny" }],
+        },
       },
     };
 
@@ -173,11 +182,11 @@
     const settingsTitle = lang === "de" ? "Bewässerung – Einstellungen" : "Lawn Irrigation – Settings";
 
     const statusCard = document.getElementById("status-card");
-    statusCard.setConfig({ entity: "sensor.lawn_irrigation_status", title: statusTitle });
+    statusCard.setConfig({ entity: "sensor.lawn_irrigation_status", title: statusTitle, layout });
     statusCard.hass = hass;
 
     const settingsCard = document.getElementById("settings-card");
-    settingsCard.setConfig({ entity: "sensor.lawn_irrigation_status", title: settingsTitle });
+    settingsCard.setConfig({ entity: "sensor.lawn_irrigation_status", title: settingsTitle, layout });
     settingsCard.hass = hass;
   </script>
 </body>

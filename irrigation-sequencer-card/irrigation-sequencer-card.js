@@ -49,6 +49,11 @@ const TRANSLATIONS = {
     title: "Title (optional)",
     zoneNamePlaceholder: "Zone name",
     zones: "Zones",
+    layout: "Layout",
+    layoutVertical: "Vertical (tall)",
+    layoutHorizontal: "Horizontal (wide)",
+    forecastHigh: "Today's forecast high",
+    schedule: "Schedule",
   },
   de: {
     status: {
@@ -87,6 +92,11 @@ const TRANSLATIONS = {
     title: "Titel (optional)",
     zoneNamePlaceholder: "Zonen-Name",
     zones: "Zonen",
+    layout: "Layout",
+    layoutVertical: "Vertikal (hoch)",
+    layoutHorizontal: "Horizontal (breit)",
+    forecastHigh: "Tageshöchsttemperatur (Prognose)",
+    schedule: "Zeitplan",
   },
 };
 
@@ -117,6 +127,27 @@ function friendlyName(hass, entityId) {
 
 function zoneDisplayName(hass, zone) {
   return zone.name?.trim() ? zone.name : friendlyName(hass, zone.entity_id);
+}
+
+const MIN_WEATHER_FACTOR = 0.1;
+const MAX_WEATHER_FACTOR = 3.0;
+
+function linearFactor(temp, referenceTemp, hotTemp, hotFactor) {
+  const span = hotTemp - referenceTemp;
+  if (!span) return 1.0;
+  const factor = 1.0 + ((temp - referenceTemp) * (hotFactor - 1.0)) / span;
+  return Math.max(MIN_WEATHER_FACTOR, Math.min(MAX_WEATHER_FACTOR, factor));
+}
+
+/** Best-effort forecast high for today, from the weather entity's legacy
+ * `forecast` attribute (still exposed by many weather integrations). Returns
+ * null if unavailable - the caller should simply omit the forecast row. */
+function todaysForecastHigh(hass, weatherEntityId) {
+  const state = weatherEntityId ? hass.states[weatherEntityId] : null;
+  const forecast = state?.attributes?.forecast;
+  if (!Array.isArray(forecast) || !forecast.length) return null;
+  const temp = forecast[0]?.temperature;
+  return typeof temp === "number" ? temp : null;
 }
 
 /** Shared base: config, hass, service calls, entity lookup. */
@@ -156,6 +187,79 @@ class IrrigationSequencerBaseCard extends HTMLElement {
         this._hass.states[id].attributes?.entry_id === entryId &&
         id.includes(translationKey)
     );
+  }
+
+  /** Proportional zone/pause timeline. Segments are colored done/active/upcoming
+   * based on last_zone_index (persists through the pause after a zone) and
+   * current_zone_index (set only while a zone is actively running). */
+  _renderTimeline(zones, attrs, t) {
+    const factor = attrs.weather_current_factor || 1;
+    const isRunning = attrs.current_zone_index != null;
+    const isPaused = !isRunning && attrs.last_zone_index != null && attrs.seconds_remaining_total > 0;
+    const lastIndex = attrs.last_zone_index;
+
+    const segments = [];
+    zones.forEach((zone, index) => {
+      const seconds = Math.max(1, Math.round(zone.duration_minutes * 60 * factor));
+      let cls = "zone-upcoming";
+      if (isRunning && index === attrs.current_zone_index) cls = "zone-active";
+      else if (lastIndex != null && index <= lastIndex && !(isPaused && index === lastIndex)) cls = "zone-done";
+      const label = zoneDisplayName(this._hass, zone);
+      segments.push({
+        weight: seconds,
+        cls,
+        title: `${index + 1}. ${label} · ${zone.duration_minutes} min`,
+        label: index + 1,
+      });
+
+      if (index < zones.length - 1 && attrs.pause_between_zones_seconds > 0) {
+        let pauseCls = "pause-upcoming";
+        if (isPaused && index === lastIndex) pauseCls = "pause-active";
+        else if (lastIndex != null && index < lastIndex) pauseCls = "pause-done";
+        segments.push({
+          weight: attrs.pause_between_zones_seconds,
+          cls: pauseCls,
+          title: `${t.pauseBetweenZones}: ${formatSeconds(attrs.pause_between_zones_seconds)}`,
+          label: "",
+        });
+      }
+    });
+
+    return `
+      <div class="timeline">
+        ${segments
+          .map(
+            (s) =>
+              `<div class="segment ${s.cls}" style="flex-grow:${s.weight}" title="${s.title}">${s.label}</div>`
+          )
+          .join("")}
+      </div>
+      <div class="timeline-legend">
+        <span><i style="background: var(--success-color, #4caf50)"></i>${t.status.running}</span>
+        <span><i style="background: var(--warning-color, #ff9800)"></i>${t.pauseBetweenZones}</span>
+      </div>
+    `;
+  }
+
+  _renderForecastStat(attrs, t) {
+    if (!attrs.weather_adjustment_enabled || !attrs.weather_entity) return "";
+    const high = todaysForecastHigh(this._hass, attrs.weather_entity);
+    if (high == null) return "";
+    const factor = linearFactor(
+      high,
+      attrs.weather_reference_temp,
+      attrs.weather_hot_temp,
+      attrs.weather_hot_factor
+    );
+    return `
+      <div class="stat" style="--tile-color: var(--warning-color, #ff9800)">
+        <ha-icon icon="mdi:thermometer-high"></ha-icon>
+        <div>
+          <div class="stat-value">${high}° · ×${factor.toFixed(2)}</div>
+          <div class="stat-label">${t.forecastHigh}</div>
+        </div>
+      </div>
+    `;
   }
 
   _sharedStyles() {
@@ -218,6 +322,39 @@ class IrrigationSequencerBaseCard extends HTMLElement {
       .not-found { padding: 16px; color: var(--error-color); }
       .drag-handle { cursor: grab; color: var(--secondary-text-color); flex-shrink: 0; }
       .zone-row.drag-over { outline: 2px dashed var(--primary-color); }
+
+      /* Timeline: proportional zone/pause segments in irrigation order */
+      .timeline { display: flex; gap: 3px; height: 30px; margin-top: 12px; }
+      .segment { border-radius: 8px; display: flex; align-items: center; justify-content: center;
+        overflow: hidden; font-size: 0.68em; font-weight: 600; color: white; min-width: 4px; }
+      .segment.zone-upcoming { background: color-mix(in srgb, var(--success-color, #4caf50) 30%, var(--divider-color, #888)); color: var(--primary-text-color); }
+      .segment.zone-done { background: var(--success-color, #4caf50); opacity: 0.5; }
+      .segment.zone-active { background: var(--success-color, #4caf50); animation: pulse-bg 1.2s ease-in-out infinite; }
+      .segment.pause-upcoming { background: color-mix(in srgb, var(--warning-color, #ff9800) 22%, var(--divider-color, #888)); }
+      .segment.pause-done { background: var(--warning-color, #ff9800); opacity: 0.45; }
+      .segment.pause-active { background: var(--warning-color, #ff9800); animation: pulse-bg 1.2s ease-in-out infinite; }
+      @keyframes pulse-bg { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.35); } }
+      .timeline-legend { display: flex; gap: 14px; margin-top: 6px; font-size: 0.72em; color: var(--secondary-text-color); }
+      .timeline-legend span { display: inline-flex; align-items: center; gap: 4px; }
+      .timeline-legend i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+
+      .stat-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+      .stat { flex: 1; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px;
+        background: var(--secondary-background-color, rgba(127,127,127,0.08)); min-width: 0; }
+      .stat ha-icon { color: var(--tile-color, var(--primary-color)); flex-shrink: 0; }
+      .stat-value { font-size: 0.92em; font-weight: 600; color: var(--primary-text-color); }
+      .stat-label { font-size: 0.72em; color: var(--secondary-text-color); }
+
+      /* Layout: horizontal arranges content side-by-side for wide/short cards */
+      .layout-horizontal .status-columns { display: flex; gap: 16px; align-items: flex-start; }
+      .layout-horizontal .status-columns .timeline-col { flex: 1.4; min-width: 0; }
+      .layout-horizontal .status-columns .stats-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+      .layout-horizontal .stat-row { flex-direction: column; margin-top: 0; }
+      .layout-horizontal .zones-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+      .layout-horizontal .settings-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; align-items: start; }
+      .layout-horizontal .zones-grid .tile-row,
+      .layout-horizontal .settings-grid .tile-row { margin-top: 0; min-width: 0; }
+      .layout-horizontal .settings-grid .tile-row-control { flex-wrap: wrap; }
     `;
   }
 }
@@ -239,7 +376,7 @@ class IrrigationSequencerStatusCard extends IrrigationSequencerBaseCard {
   }
 
   getCardSize() {
-    return 4;
+    return this._config?.layout === "horizontal" ? 3 : 4;
   }
 
   _render() {
@@ -259,53 +396,62 @@ class IrrigationSequencerStatusCard extends IrrigationSequencerBaseCard {
     const statusColor = STATUS_COLORS[status] || STATUS_COLORS.idle;
     const isRunning = status === "running";
     const isBusy = status === "running" || status === "paused_between_zones";
+    const layout = this._config.layout === "horizontal" ? "horizontal" : "vertical";
 
-    const factorBadge =
-      attrs.weather_adjustment_enabled && attrs.weather_current_temp != null
-        ? `<div class="chip chip-static"><ha-icon icon="mdi:weather-partly-cloudy"></ha-icon>${attrs.weather_current_temp}° · ×${attrs.weather_current_factor.toFixed(2)}</div>`
-        : "";
+    const activeZone = attrs.current_zone_index != null ? zones[attrs.current_zone_index] : null;
+    const totalPlanned =
+      zones.reduce((sum, z) => sum + Math.round(z.duration_minutes * 60 * (attrs.weather_current_factor || 1)), 0) +
+      attrs.pause_between_zones_seconds * Math.max(0, zones.length - 1);
+    const remaining = attrs.seconds_remaining_total || 0;
+    const pct = isBusy && totalPlanned > 0 ? Math.max(0, Math.min(100, 100 - (remaining / totalPlanned) * 100)) : 0;
 
-    let body = "";
-    if (isBusy) {
-      const totalPlanned =
-        zones.reduce((sum, z) => sum + Math.round(z.duration_minutes * 60 * (attrs.weather_current_factor || 1)), 0) +
-        attrs.pause_between_zones_seconds * Math.max(0, zones.length - 1);
-      const remaining = attrs.seconds_remaining_total || 0;
-      const pct = totalPlanned > 0 ? Math.max(0, Math.min(100, 100 - (remaining / totalPlanned) * 100)) : 0;
-      const activeZone = attrs.current_zone_index != null ? zones[attrs.current_zone_index] : null;
+    const statsCol = `
+      <div class="stat-row">
+        ${
+          isBusy
+            ? `<div class="stat" style="--tile-color: ${statusColor}">
+                <ha-icon icon="mdi:sprinkler-variant"></ha-icon>
+                <div>
+                  <div class="stat-value">${activeZone ? zoneDisplayName(this._hass, activeZone) : t.pauseBetweenZones}</div>
+                  <div class="stat-label">${activeZone ? t.remainingZone(formatSeconds(attrs.seconds_remaining_zone)) : t.remainingTotal(formatSeconds(remaining))}</div>
+                </div>
+              </div>`
+            : `<div class="stat" style="--tile-color: var(--info-color, #03a9f4)">
+                <ha-icon icon="mdi:calendar-clock"></ha-icon>
+                <div>
+                  <div class="stat-value">${attrs.next_run ? new Date(attrs.next_run).toLocaleString(this._hass.language, { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "-"}</div>
+                  <div class="stat-label">${t.nextRun}</div>
+                </div>
+              </div>`
+        }
+        ${
+          attrs.weather_adjustment_enabled && attrs.weather_current_temp != null
+            ? `<div class="stat" style="--tile-color: var(--primary-color)">
+                <ha-icon icon="mdi:weather-partly-cloudy"></ha-icon>
+                <div>
+                  <div class="stat-value">${attrs.weather_current_temp}° · ×${attrs.weather_current_factor.toFixed(2)}</div>
+                  <div class="stat-label">${t.currentFactor}</div>
+                </div>
+              </div>`
+            : ""
+        }
+        ${this._renderForecastStat(attrs, t)}
+      </div>
+    `;
 
-      body = `
-        <div class="tile-row" style="--tile-color: ${statusColor}">
-          <div class="tile-row-icon"><ha-icon icon="mdi:sprinkler-variant"></ha-icon></div>
-          <div class="tile-row-label" style="min-width:0; flex:1;">
-            <div class="tile-primary" style="font-size:0.95em;">${activeZone ? zoneDisplayName(this._hass, activeZone) : t.pauseBetweenZones}</div>
-            <div class="tile-secondary">${activeZone ? t.remainingZone(formatSeconds(attrs.seconds_remaining_zone)) : ""}</div>
-          </div>
-        </div>
-        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%; background:${statusColor}"></div></div>
-        <div class="footer-note">${t.remainingTotal(formatSeconds(remaining))}</div>
-      `;
-    } else {
-      body = `
-        <div class="chip-row">
-          ${zones
-            .map(
-              (z, i) =>
-                `<div class="chip chip-static"><span class="chip-badge">${i + 1}</span>${zoneDisplayName(
-                  this._hass,
-                  z
-                )} · ${z.duration_minutes} min</div>`
-            )
-            .join("")}
-        </div>
-        ${factorBadge ? `<div class="chip-row">${factorBadge}</div>` : ""}
-        ${attrs.next_run ? `<div class="footer-note">${t.nextRun}: ${new Date(attrs.next_run).toLocaleString(this._hass.language)}</div>` : ""}
-      `;
-    }
+    const timelineCol = `
+      ${isBusy ? `<div class="progress-bar"><div class="progress-fill" style="width:${pct}%; background:${statusColor}"></div></div>` : ""}
+      ${this._renderTimeline(zones, attrs, t)}
+    `;
+
+    const body =
+      layout === "horizontal"
+        ? `<div class="status-columns"><div class="timeline-col">${timelineCol}</div><div class="stats-col">${statsCol}</div></div>`
+        : `${timelineCol}${statsCol}`;
 
     this.shadowRoot.innerHTML = `
       <style>${this._sharedStyles()}</style>
-      <ha-card>
+      <ha-card class="${layout === "horizontal" ? "layout-horizontal" : ""}">
         <div class="tile-header" style="--tile-color: ${statusColor}">
           <div class="tile-icon ${isRunning ? "spraying" : ""}"><ha-icon icon="mdi:sprinkler-variant"></ha-icon></div>
           <div class="tile-text">
@@ -364,10 +510,11 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
     const attrs = stateObj.attributes;
     const zones = [...(attrs.zones || [])].sort((a, b) => a.position - b.position);
     const title = this._config.title || t.settingsCardTitle;
+    const layout = this._config.layout === "horizontal" ? "horizontal" : "vertical";
 
     this.shadowRoot.innerHTML = `
       <style>${this._sharedStyles()}</style>
-      <ha-card>
+      <ha-card class="${layout === "horizontal" ? "layout-horizontal" : ""}">
         <div class="tile-header" style="--tile-color: var(--primary-color)">
           <div class="tile-icon"><ha-icon icon="mdi:tune-variant"></ha-icon></div>
           <div class="tile-text">
@@ -376,55 +523,57 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
           </div>
         </div>
 
-        <div class="zones">
+        <div class="zones zones-grid">
           ${zones.map((zone, index) => this._renderZoneRow(zone, index, t)).join("")}
         </div>
 
-        <div class="tile-row" style="--tile-color: var(--warning-color, #ff9800)">
-          <div class="tile-row-icon"><ha-icon icon="mdi:timer-sand"></ha-icon></div>
-          <div class="tile-row-label">${t.pauseBetweenZones}</div>
-          <div class="tile-row-control">
-            <input type="range" min="0" max="900" step="10" value="${attrs.pause_between_zones_seconds}" id="pause-range" />
-            <span class="tile-row-value">${formatSeconds(attrs.pause_between_zones_seconds)}</span>
-          </div>
-        </div>
-        <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4)">
-          <div class="tile-row-icon"><ha-icon icon="mdi:weather-night"></ha-icon></div>
-          <div class="tile-row-label">${t.nightStart}</div>
-          <div class="tile-row-control">
-            <input type="time" id="start-time" value="${(attrs.start_time || "05:00:00").slice(0, 5)}" step="60" />
-          </div>
-        </div>
-        <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4)">
-          <div class="tile-row-icon"><ha-icon icon="mdi:snowflake"></ha-icon></div>
-          <div class="tile-row-label">${t.winterMode}</div>
-          <div class="tile-row-control">
-            <label class="switch">
-              <input type="checkbox" id="winter-toggle" ${attrs.winter_mode ? "checked" : ""} />
-              <span class="slider-toggle"></span>
-            </label>
-          </div>
-        </div>
-        <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4); align-items: flex-start;">
-          <div class="tile-row-icon"><ha-icon icon="mdi:weather-rainy"></ha-icon></div>
-          <div class="tile-row-label">${t.rainPause}</div>
-          <div class="tile-row-control" style="flex-wrap: wrap;">
-            <div class="chip-row" style="margin-top:0;">
-              ${[1, 3, 7, 14]
-                .map(
-                  (d) => `<button class="chip" data-days="${d}">${d} ${d > 1 ? t.days : t.day}</button>`
-                )
-                .join("")}
-              ${
-                attrs.rain_pause_until
-                  ? `<button class="chip chip-clear" id="clear-rain">${t.rainPauseClear(attrs.rain_pause_until)}</button>`
-                  : ""
-              }
+        <div class="settings-grid">
+          <div class="tile-row" style="--tile-color: var(--warning-color, #ff9800)">
+            <div class="tile-row-icon"><ha-icon icon="mdi:timer-sand"></ha-icon></div>
+            <div class="tile-row-label">${t.pauseBetweenZones}</div>
+            <div class="tile-row-control">
+              <input type="range" min="0" max="900" step="10" value="${attrs.pause_between_zones_seconds}" id="pause-range" />
+              <span class="tile-row-value">${formatSeconds(attrs.pause_between_zones_seconds)}</span>
             </div>
           </div>
-        </div>
+          <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4)">
+            <div class="tile-row-icon"><ha-icon icon="mdi:weather-night"></ha-icon></div>
+            <div class="tile-row-label">${t.nightStart}</div>
+            <div class="tile-row-control">
+              <input type="time" id="start-time" value="${(attrs.start_time || "05:00:00").slice(0, 5)}" step="60" />
+            </div>
+          </div>
+          <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4)">
+            <div class="tile-row-icon"><ha-icon icon="mdi:snowflake"></ha-icon></div>
+            <div class="tile-row-label">${t.winterMode}</div>
+            <div class="tile-row-control">
+              <label class="switch">
+                <input type="checkbox" id="winter-toggle" ${attrs.winter_mode ? "checked" : ""} />
+                <span class="slider-toggle"></span>
+              </label>
+            </div>
+          </div>
+          <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4); align-items: flex-start;">
+            <div class="tile-row-icon"><ha-icon icon="mdi:weather-rainy"></ha-icon></div>
+            <div class="tile-row-label">${t.rainPause}</div>
+            <div class="tile-row-control" style="flex-wrap: wrap;">
+              <div class="chip-row" style="margin-top:0;">
+                ${[1, 3, 7, 14]
+                  .map(
+                    (d) => `<button class="chip" data-days="${d}">${d} ${d > 1 ? t.days : t.day}</button>`
+                  )
+                  .join("")}
+                ${
+                  attrs.rain_pause_until
+                    ? `<button class="chip chip-clear" id="clear-rain">${t.rainPauseClear(attrs.rain_pause_until)}</button>`
+                    : ""
+                }
+              </div>
+            </div>
+          </div>
 
-        ${this._renderWeatherSection(attrs, t)}
+          ${this._renderWeatherSection(attrs, t)}
+        </div>
       </ha-card>
     `;
 
@@ -686,12 +835,22 @@ class IrrigationSequencerCardEditorBase extends HTMLElement {
         <label>${t.title}</label>
         <input id="title" type="text" value="${this._config?.title || ""}" />
       </div>
+      <div class="row">
+        <label>${t.layout}</label>
+        <select id="layout">
+          <option value="vertical" ${this._config?.layout !== "horizontal" ? "selected" : ""}>${t.layoutVertical}</option>
+          <option value="horizontal" ${this._config?.layout === "horizontal" ? "selected" : ""}>${t.layoutHorizontal}</option>
+        </select>
+      </div>
     `;
     this.shadowRoot.getElementById("entity").addEventListener("change", (e) =>
       this._updateConfig({ entity: e.target.value })
     );
     this.shadowRoot.getElementById("title").addEventListener("change", (e) =>
       this._updateConfig({ title: e.target.value })
+    );
+    this.shadowRoot.getElementById("layout").addEventListener("change", (e) =>
+      this._updateConfig({ layout: e.target.value })
     );
   }
 
