@@ -72,6 +72,10 @@
       "name": "Zonen-Dauer setzen",
       "description": "Legt fest, wie lange eine einzelne Zone bewässert wird."
     },
+    "set_zone_name": {
+      "name": "Zonen-Namen setzen",
+      "description": "Legt einen eigenen Anzeigenamen für eine Zone fest (unabhängig vom Entitätsnamen)."
+    },
     "set_pause_between_zones": {
       "name": "Pause zwischen Zonen setzen",
       "description": "Legt die Pause zwischen zwei Bewässerungszonen fest."

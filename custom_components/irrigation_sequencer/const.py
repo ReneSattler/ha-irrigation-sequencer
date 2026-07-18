@@ -35,6 +35,7 @@ STATE_WINTER_MODE = "winter_mode"
 STATE_RAIN_PAUSE = "rain_pause"
 
 SERVICE_SET_ZONE_ORDER = "set_zone_order"
+SERVICE_SET_ZONE_NAME = "set_zone_name"
 SERVICE_SET_ZONE_DURATION = "set_zone_duration"
 SERVICE_SET_PAUSE_BETWEEN_ZONES = "set_pause_between_zones"
 SERVICE_SET_START_TIME = "set_start_time"

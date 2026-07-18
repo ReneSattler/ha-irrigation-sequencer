@@ -43,6 +43,7 @@ class IrrigationSequencerManager:
         self.zones: list[dict[str, Any]] = [
             {
                 "entity_id": entity_id,
+                "name": "",
                 "duration_minutes": DEFAULT_ZONE_DURATION_MINUTES,
                 "position": index,
             }
@@ -80,6 +81,7 @@ class IrrigationSequencerManager:
             for zone in self.zones:
                 stored = stored_zones.get(zone["entity_id"])
                 if stored:
+                    zone["name"] = stored.get("name", "")
                     zone["duration_minutes"] = stored.get(
                         "duration_minutes", DEFAULT_ZONE_DURATION_MINUTES
                     )
@@ -161,6 +163,14 @@ class IrrigationSequencerManager:
         for zone in self.zones:
             if zone["entity_id"] == entity_id:
                 zone["duration_minutes"] = max(1, int(minutes))
+                await self._async_save()
+                self._notify_listeners()
+                return
+
+    async def async_set_zone_name(self, entity_id: str, name: str) -> None:
+        for zone in self.zones:
+            if zone["entity_id"] == entity_id:
+                zone["name"] = name.strip()
                 await self._async_save()
                 self._notify_listeners()
                 return

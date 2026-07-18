@@ -2,24 +2,32 @@
 
 *[English version](README.md)*
 
-Mehrzonen-Bewässerungssteuerung für Home Assistant mit grafischer Lovelace-Card.
+Mehrzonen-Bewässerungssteuerung für Home Assistant mit zwei grafischen
+Lovelace-Cards im Stil der nativen Home-Assistant-Tile-Cards.
 
 Steuert 2 bis 10 Ventile bzw. Steckdosen nacheinander in einer frei
-konfigurierbaren Reihenfolge – inklusive Pausen zwischen den Zonen,
+konfigurierbaren Reihenfolge – jede Zone kann einen eigenen Namen, eine
+eigene Position und Dauer haben – inklusive Pausen zwischen den Zonen,
 nächtlichem Start, Wintermodus, manueller Regen-Pause und optionaler
 wetterbasierter Dauer-Anpassung.
 
-![Irrigation Sequencer Card – bereit, 5 Zonen](screenshots/card-idle-de.png)
-![Irrigation Sequencer Card – läuft gerade](screenshots/card-running-de.png)
+![Irrigation Sequencer Status- und Settings-Card – bereit, 5 Zonen](screenshots/cards-idle-de.png)
+![Irrigation Sequencer Status- und Settings-Card – läuft gerade](screenshots/cards-running-de.png)
 
 *Beispiel mit 5 Zonen. `screenshots/demo.html` ist eine eigenständige,
-interaktive Kopie der echten Card, die du ohne Home-Assistant-Instanz direkt
+interaktive Kopie der echten Cards, die du ohne Home-Assistant-Instanz direkt
 im Browser ausprobieren kannst.*
 
 ## Funktionen
 
+- **Zwei Cards**: eine reine **Status-Card** (aktive Zone, Fortschritt,
+  nächster Lauf) und eine **Settings-Card** (alle Einstellungen) – so kannst
+  du den Status z. B. auf einem Übersichts-Dashboard zeigen und die
+  Einstellungen woanders unterbringen
+- **Eigene Zonen-Namen** – jedes Ventil/jede Steckdose kann einen eigenen
+  Anzeigenamen bekommen, unabhängig vom Namen der zugrunde liegenden Entität
 - **Sequenz mit fester Reihenfolge** – jede Zone wird nacheinander bewässert,
-  die Reihenfolge lässt sich in der Card per Drag & Drop ändern
+  die Reihenfolge lässt sich in der Settings-Card per Drag & Drop ändern
 - **Individuelle Dauer pro Zone** – jede Zone hat ihre eigene Bewässerungsdauer (Minuten)
 - **Pause zwischen den Zonen** – konfigurierbare Wartezeit, bevor die nächste Zone startet
 - **Nachtstart** – tägliche automatische Startzeit (z. B. 05:00 Uhr)
@@ -27,11 +35,10 @@ im Browser ausprobieren kannst.*
 - **Regen-Pause** – die Sequenz für 1 bis 14 Tage manuell aussetzen (z. B. nach Regen),
   danach läuft der normale Zeitplan automatisch wieder
 - **Wetterbasierte Dauer-Anpassung** – optional die Dauer jeder Zone mit einem
-  Faktor multiplizieren, der aus der aktuellen Außentemperatur berechnet wird
-  (z. B. Faktor 1.0 bei 20 °C, Faktor 2.0 bei 30 °C, dazwischen linear interpoliert)
-- **Grafische Lovelace-Card** – Zonen als Karten mit Live-Animation der aktiv
-  bewässernden Zone, Fortschrittsbalken, Slidern für Dauer/Pause und
-  Schnellauswahl-Buttons für die Regen-Pause
+  Faktor multiplizieren, der aus der aktuellen Außentemperatur berechnet wird,
+  linear interpoliert zwischen zwei Referenzpunkten. Beispiel mit den
+  Standardwerten (Faktor 1.0 bei 20 °C, Faktor 2.0 bei 30 °C): bei 25 °C ist
+  der Faktor 1.5 – eine 5-minütige Zone läuft dann 7,5 Minuten.
 
 ## Voraussetzungen
 
@@ -42,11 +49,11 @@ Home Assistant an.
 
 ## Installation über HACS
 
-1. HACS öffnen → **Integrationen** (bzw. **Frontend** für die Card) → oben
+1. HACS öffnen → **Integrationen** (bzw. **Frontend** für die Cards) → oben
    rechts auf die drei Punkte → **Benutzerdefinierte Repositories**
 2. Repository-URL hinzufügen: `https://github.com/ReneSattler/ha-irrigation-sequencer`
    - Kategorie **Integration** hinzufügen → installiert die Backend-Logik
-   - Kategorie **Plugin (Frontend)** hinzufügen → installiert die Lovelace-Card
+   - Kategorie **Plugin (Frontend)** hinzufügen → installiert die Lovelace-Cards
 3. Home Assistant neu starten
 4. **Einstellungen → Geräte & Dienste → Integration hinzufügen** →
    "Irrigation Sequencer" suchen
@@ -62,20 +69,24 @@ Home Assistant an.
    `/local/irrigation-sequencer-card.js` als JavaScript-Modul hinzufügen
 4. Home Assistant neu starten und die Integration wie oben beschrieben einrichten
 
-## Card einrichten
+## Cards einrichten
 
-Nach der Einrichtung der Integration eine neue Lovelace-Karte hinzufügen und
-`Irrigation Sequencer Card` auswählen. Im visuellen Editor die
-Status-Sensor-Entität (`sensor.<name>_status`) auswählen – alle weiteren
-Einstellungen (Reihenfolge, Dauer, Pausen, Startzeit, Wintermodus,
-Regen-Pause, Wetter-Anpassung) werden direkt über die Karte gesteuert. Die
-Texte der Card folgen automatisch der Home-Assistant-UI-Sprache (Fallback:
-Englisch).
+Nach der Einrichtung der Integration zwei neue Lovelace-Karten hinzufügen und
+`Irrigation Sequencer - Status` bzw. `Irrigation Sequencer - Settings`
+auswählen. Im visuellen Editor jeweils die Status-Sensor-Entität
+(`sensor.<name>_status`) auswählen. Die Texte folgen automatisch der
+Home-Assistant-UI-Sprache (Fallback: Englisch).
 
 ```yaml
-type: custom:irrigation-sequencer-card
+type: custom:irrigation-sequencer-status-card
 entity: sensor.rasenbewasserung_status
 title: Rasenbewässerung
+```
+
+```yaml
+type: custom:irrigation-sequencer-settings-card
+entity: sensor.rasenbewasserung_status
+title: Rasenbewässerung – Einstellungen
 ```
 
 ## Konfiguration später ändern
@@ -86,12 +97,12 @@ Nur die *anfängliche* Zonen-Auswahl ist ein klassischer "Einrichtungsdialog"
 - **Zonen (Ventile hinzufügen/entfernen)**: unter **Einstellungen → Geräte &
   Dienste → Irrigation Sequencer → Konfigurieren** öffnet sich ein
   Optionen-Dialog, in dem du die 2–10 Ventil-/Steckdosen-Entitäten jederzeit
-  neu auswählen kannst. Zonen, die ausgewählt bleiben, behalten ihre Dauer und
-  Position; neu hinzugefügte Zonen bekommen Standardwerte.
-- **Wintermodus, Regen-Pause, Nachtstart, Pause zwischen Zonen,
-  Wetter-Anpassung, Zonen-Reihenfolge und -Dauer**: das sind keine
-  Dialog-Einstellungen, sondern Live-Entitäten/-Werte, die du direkt über die
-  Card änderst (empfohlen), über die bereitgestellten Entitäten
+  neu auswählen kannst. Zonen, die ausgewählt bleiben, behalten ihren Namen,
+  ihre Dauer und Position; neu hinzugefügte Zonen bekommen Standardwerte.
+- **Zonen-Namen, -Reihenfolge, -Dauer, Wintermodus, Regen-Pause, Nachtstart,
+  Pause zwischen Zonen, Wetter-Anpassung**: das sind keine
+  Dialog-Einstellungen, sondern Live-Werte, die du direkt über die
+  Settings-Card änderst (empfohlen), über die bereitgestellten Entitäten
   `switch.*_winter_mode` / `switch.*_weather_adjustment`, oder über die
   Services unten (praktisch für eigene Automationen, z. B. "Wintermodus jedes
   Jahr am 1. November aktivieren").
@@ -106,6 +117,7 @@ eigene Automationen:
 | `irrigation_sequencer.start_now` | Sequenz sofort manuell starten |
 | `irrigation_sequencer.stop` | Laufende Sequenz sofort abbrechen |
 | `irrigation_sequencer.set_zone_order` | Reihenfolge der Zonen festlegen |
+| `irrigation_sequencer.set_zone_name` | Eigenen Anzeigenamen für eine Zone setzen |
 | `irrigation_sequencer.set_zone_duration` | Bewässerungsdauer einer Zone setzen |
 | `irrigation_sequencer.set_pause_between_zones` | Pause zwischen Zonen setzen |
 | `irrigation_sequencer.set_start_time` | Tägliche Startzeit setzen |
