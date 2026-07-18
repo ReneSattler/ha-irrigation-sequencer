@@ -391,10 +391,16 @@ class IrrigationSequencerManager:
             self._notify_listeners()
 
     async def _async_set_valve(self, entity_id: str, turn_on: bool) -> None:
+        # Zones can be valve, switch, or light entities (the last one mostly
+        # useful for testing with a lamp instead of a real relay) - each
+        # domain has its own turn on/off service pair.
         domain = entity_id.split(".")[0]
         if domain == "valve":
             service = "open_valve" if turn_on else "close_valve"
             service_domain = "valve"
+        elif domain == "light":
+            service = "turn_on" if turn_on else "turn_off"
+            service_domain = "light"
         else:
             service = "turn_on" if turn_on else "turn_off"
             service_domain = "switch"
