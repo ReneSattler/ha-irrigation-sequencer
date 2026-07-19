@@ -5,6 +5,22 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.9.2] - 2026-07-19
+
+- Fixed the forecast stat's label overflowing its tile on narrow mobile
+  screens for long, unbroken German compound words (e.g.
+  "Tageshöchsttemperatur") - CSS only wraps at spaces/hyphens by default,
+  so a single long word overruns the tile instead of wrapping. Added
+  `overflow-wrap`/`word-break` to `.stat-label`/`.stat-value`. Fixes
+  [#23](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/23).
+- Added a pytest test suite (`tests/`, `pytest-homeassistant-custom-component`)
+  for `IrrigationSequencerManager`'s core logic: zone order/duration/name,
+  pause between zones, start-times validation and overlap detection
+  (including past-midnight wraparound), winter mode and rain pause
+  blocking/expiry, and the weather duration factor's interpolation and
+  clamping. Runs automatically via a new GitHub Actions workflow on every
+  push/PR. Fixes [#22](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/22).
+
 ## [0.9.1] - 2026-07-19
 
 - Reopened and hardened [#14](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/14): zone name field losing focus immediately on tap, confirmed
