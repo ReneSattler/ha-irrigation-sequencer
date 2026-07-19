@@ -5,6 +5,17 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.4.2] - 2026-07-19
+
+- Fixed sliders/fields visually snapping back to their old value right after
+  being committed (e.g. a zone duration flashing back to 10 min). The
+  "change" handlers released the render-suppression guard immediately, but
+  the service call that actually persists the new value is asynchronous -
+  any unrelated Home Assistant update landing in that gap re-rendered the
+  card from attributes that hadn't caught up yet. Committing a value now
+  keeps rendering suppressed for a short buffer (and then forces one fresh
+  render) instead of lifting it immediately.
+
 ## [0.4.1] - 2026-07-19
 
 - Fixed the card's language detection falling back to English on recent
