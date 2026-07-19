@@ -5,6 +5,21 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.6.0] - 2026-07-19
+
+- Replaced the rain-pause quick-select buttons (1/3/7/14 days) with a
+  1-14 day slider, matching the other duration/pause controls.
+- Fixed the zone-name field (and other text inputs) losing focus after a
+  few keystrokes: rendering could still be forced through in some timing
+  windows despite the suppression flag. Both cards and the visual editor
+  now also check, as a hard backstop, whether an input/select/textarea in
+  the card currently has real DOM focus before ever rebuilding the DOM -
+  regardless of any timer state.
+- Clarified (no code change): the thin bar above the zone timeline is the
+  overall sequence progress (fills 0-100% as the whole run proceeds); the
+  colored timeline below it shows the same run per zone, with the active
+  segment pulsing. Both are intentional and were working correctly.
+
 ## [0.5.0] - 2026-07-19
 
 - Fixed the winter mode toggle failing with "must contain at least one of
