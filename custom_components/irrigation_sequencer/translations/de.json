@@ -80,9 +80,9 @@
       "name": "Pause zwischen Zonen setzen",
       "description": "Legt die Pause zwischen zwei Bewässerungszonen fest."
     },
-    "set_start_time": {
-      "name": "Startzeit setzen",
-      "description": "Legt die tägliche (nächtliche) Startzeit der Sequenz fest."
+    "set_start_times": {
+      "name": "Startzeiten setzen",
+      "description": "Legt die täglichen (nächtlichen) Startzeiten der Sequenz fest (1-3 Zeiten, jede startet einen vollständigen Durchlauf)."
     },
     "set_rain_pause": {
       "name": "Regen-Pause setzen",

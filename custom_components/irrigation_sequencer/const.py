@@ -7,8 +7,11 @@ PLATFORMS = ["sensor", "switch", "button"]
 CONF_ZONE_ENTITIES = "zone_entities"
 
 DEFAULT_ZONE_DURATION_MINUTES = 10
+MAX_ZONE_DURATION_MINUTES = 30
 DEFAULT_PAUSE_SECONDS = 120
 DEFAULT_START_TIME = "05:00:00"
+MIN_START_TIMES = 1
+MAX_START_TIMES = 3
 
 MIN_ZONES = 1
 MAX_ZONES = 10
@@ -46,7 +49,7 @@ SERVICE_SET_ZONE_ORDER = "set_zone_order"
 SERVICE_SET_ZONE_NAME = "set_zone_name"
 SERVICE_SET_ZONE_DURATION = "set_zone_duration"
 SERVICE_SET_PAUSE_BETWEEN_ZONES = "set_pause_between_zones"
-SERVICE_SET_START_TIME = "set_start_time"
+SERVICE_SET_START_TIMES = "set_start_times"
 SERVICE_SET_RAIN_PAUSE = "set_rain_pause"
 SERVICE_CLEAR_RAIN_PAUSE = "clear_rain_pause"
 SERVICE_SET_WEATHER_ADJUSTMENT = "set_weather_adjustment"
@@ -56,7 +59,7 @@ SERVICE_STOP = "stop"
 
 ATTR_ZONES = "zones"
 ATTR_PAUSE_BETWEEN_ZONES_SECONDS = "pause_between_zones_seconds"
-ATTR_START_TIME = "start_time"
+ATTR_START_TIMES = "start_times"
 ATTR_WINTER_MODE = "winter_mode"
 ATTR_RAIN_PAUSE_UNTIL = "rain_pause_until"
 ATTR_CURRENT_ZONE_INDEX = "current_zone_index"

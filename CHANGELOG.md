@@ -5,6 +5,25 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.7.0] - 2026-07-19
+
+- **Fixed**: the zone-name field (and other row content) could lose focus
+  after a keystroke or two - even on desktop. Root cause: the whole zone
+  row had `draggable="true"` for reordering, so any tiny mouse movement
+  while clicking into the text field was interpreted as starting a drag of
+  the row, blurring the field instantly. Only the drag-handle icon is
+  draggable now; the row itself only handles dragover/drop, so reordering
+  still works exactly the same way. Not related to the previous
+  render-suppression work, which was confirmed still working correctly.
+- Lowered the maximum per-zone duration from 60 to 30 minutes (slider and
+  the `set_zone_duration` service).
+- **Multiple daily start times**: the sequence can now have 1 to 3 start
+  times instead of exactly one, each independently triggering a full run
+  (e.g. an early-morning and a late-evening watering). The settings card
+  gained add/remove controls for the extra rows; `set_start_time` was
+  replaced by `set_start_times` (list of 1-3 times). Existing single
+  `start_time` storage is migrated automatically on first load.
+
 ## [0.6.0] - 2026-07-19
 
 - Replaced the rain-pause quick-select buttons (1/3/7/14 days) with a

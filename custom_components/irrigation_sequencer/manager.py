@@ -18,6 +18,7 @@ from .const import (
     DEFAULT_WEATHER_HOT_TEMP,
     DEFAULT_WEATHER_REFERENCE_TEMP,
     DEFAULT_ZONE_DURATION_MINUTES,
+    MAX_START_TIMES,
     MAX_WEATHER_FACTOR,
     MIN_WEATHER_FACTOR,
     STATE_IDLE,
@@ -50,7 +51,7 @@ class IrrigationSequencerManager:
             for index, entity_id in enumerate(zone_entities)
         ]
         self.pause_between_zones_seconds: int = DEFAULT_PAUSE_SECONDS
-        self.start_time: str = DEFAULT_START_TIME
+        self.start_times: list[str] = [DEFAULT_START_TIME]
         self.winter_mode: bool = False
         self.rain_pause_until: str | None = None
 
@@ -71,7 +72,7 @@ class IrrigationSequencerManager:
 
         self._run_task: asyncio.Task | None = None
         self._stop_requested = False
-        self._unsub_daily_trigger: Callable[[], None] | None = None
+        self._unsub_daily_triggers: list[Callable[[], None]] = []
         self._listeners: list[Callable[[], None]] = []
 
     # ------------------------------------------------------------------ #
@@ -95,7 +96,12 @@ class IrrigationSequencerManager:
             self.pause_between_zones_seconds = data.get(
                 "pause_between_zones_seconds", DEFAULT_PAUSE_SECONDS
             )
-            self.start_time = data.get("start_time", DEFAULT_START_TIME)
+            # Migrate the pre-0.7 single "start_time" field to the new
+            # "start_times" list transparently on first load.
+            if "start_times" in data:
+                self.start_times = data["start_times"] or [DEFAULT_START_TIME]
+            elif "start_time" in data:
+                self.start_times = [data["start_time"]]
             self.winter_mode = data.get("winter_mode", False)
             self.rain_pause_until = data.get("rain_pause_until")
 
@@ -114,7 +120,7 @@ class IrrigationSequencerManager:
             {
                 "zones": self.zones,
                 "pause_between_zones_seconds": self.pause_between_zones_seconds,
-                "start_time": self.start_time,
+                "start_times": self.start_times,
                 "winter_mode": self.winter_mode,
                 "rain_pause_until": self.rain_pause_until,
                 "weather_adjustment_enabled": self.weather_adjustment_enabled,
@@ -139,8 +145,9 @@ class IrrigationSequencerManager:
             listener()
 
     async def async_unload(self) -> None:
-        if self._unsub_daily_trigger:
-            self._unsub_daily_trigger()
+        for unsub in self._unsub_daily_triggers:
+            unsub()
+        self._unsub_daily_triggers = []
         if self._run_task and not self._run_task.done():
             self._stop_requested = True
             await self._run_task
@@ -184,8 +191,10 @@ class IrrigationSequencerManager:
         await self._async_save()
         self._notify_listeners()
 
-    async def async_set_start_time(self, start_time: str) -> None:
-        self.start_time = start_time
+    async def async_set_start_times(self, start_times: list[str]) -> None:
+        if not 1 <= len(start_times) <= MAX_START_TIMES:
+            raise ValueError(f"start_times must have 1-{MAX_START_TIMES} entries")
+        self.start_times = sorted(start_times)
         await self._async_save()
         self._schedule_daily_trigger()
         self._notify_listeners()
@@ -263,13 +272,18 @@ class IrrigationSequencerManager:
     # ------------------------------------------------------------------ #
 
     def _schedule_daily_trigger(self) -> None:
-        if self._unsub_daily_trigger:
-            self._unsub_daily_trigger()
-
-        hour, minute, second = (int(part) for part in self.start_time.split(":"))
-        self._unsub_daily_trigger = async_track_time_change(
-            self.hass, self._handle_daily_trigger, hour=hour, minute=minute, second=second
-        )
+        for unsub in self._unsub_daily_triggers:
+            unsub()
+        self._unsub_daily_triggers = [
+            async_track_time_change(
+                self.hass,
+                self._handle_daily_trigger,
+                hour=int(hour),
+                minute=int(minute),
+                second=int(second),
+            )
+            for hour, minute, second in (t.split(":") for t in self.start_times)
+        ]
 
     @callback
     def _handle_daily_trigger(self, now: datetime) -> None:
@@ -294,12 +308,15 @@ class IrrigationSequencerManager:
         blocked, _ = self._is_blocked()
         if blocked:
             return None
-        hour, minute, second = (int(part) for part in self.start_time.split(":"))
         now = dt_util.now()
-        candidate = now.replace(hour=hour, minute=minute, second=second, microsecond=0)
-        if candidate <= now:
-            candidate += timedelta(days=1)
-        return candidate.isoformat()
+        candidates = []
+        for start_time in self.start_times:
+            hour, minute, second = (int(part) for part in start_time.split(":"))
+            candidate = now.replace(hour=hour, minute=minute, second=second, microsecond=0)
+            if candidate <= now:
+                candidate += timedelta(days=1)
+            candidates.append(candidate)
+        return min(candidates).isoformat()
 
     # ------------------------------------------------------------------ #
     # Running the sequence

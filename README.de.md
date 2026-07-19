@@ -39,7 +39,7 @@ im Browser ausprobieren kannst.*
   die Reihenfolge lässt sich in der Settings-Card per Drag & Drop ändern
 - **Individuelle Dauer pro Zone** – jede Zone hat ihre eigene Bewässerungsdauer (Minuten)
 - **Pause zwischen den Zonen** – konfigurierbare Wartezeit, bevor die nächste Zone startet
-- **Nachtstart** – tägliche automatische Startzeit (z. B. 05:00 Uhr)
+- **1–3 tägliche Startzeiten** – z. B. ein früher und ein später Lauf am Tag, jede startet unabhängig eine vollständige Sequenz
 - **Wintermodus** – ein Schalter, der die gesamte Bewässerung komplett deaktiviert
 - **Regen-Pause** – die Sequenz für 1 bis 14 Tage manuell aussetzen (z. B. nach Regen),
   danach läuft der normale Zeitplan automatisch wieder
@@ -140,7 +140,7 @@ eigene Automationen:
 | `irrigation_sequencer.set_zone_name` | Eigenen Anzeigenamen für eine Zone setzen |
 | `irrigation_sequencer.set_zone_duration` | Bewässerungsdauer einer Zone setzen |
 | `irrigation_sequencer.set_pause_between_zones` | Pause zwischen Zonen setzen |
-| `irrigation_sequencer.set_start_time` | Tägliche Startzeit setzen |
+| `irrigation_sequencer.set_start_times` | Tägliche Startzeiten setzen (1–3) |
 | `irrigation_sequencer.set_rain_pause` | Regen-Pause für 1–14 Tage setzen |
 | `irrigation_sequencer.clear_rain_pause` | Regen-Pause sofort aufheben |
 | `irrigation_sequencer.set_winter_mode` | Wintermodus aktivieren/deaktivieren |

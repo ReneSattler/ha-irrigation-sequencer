@@ -13,12 +13,15 @@ from .const import (
     CONF_ZONE_ENTITIES,
     DOMAIN,
     MAX_RAIN_PAUSE_DAYS,
+    MAX_START_TIMES,
+    MAX_ZONE_DURATION_MINUTES,
     MIN_RAIN_PAUSE_DAYS,
+    MIN_START_TIMES,
     PLATFORMS,
     SERVICE_CLEAR_RAIN_PAUSE,
     SERVICE_SET_PAUSE_BETWEEN_ZONES,
     SERVICE_SET_RAIN_PAUSE,
-    SERVICE_SET_START_TIME,
+    SERVICE_SET_START_TIMES,
     SERVICE_SET_WEATHER_ADJUSTMENT,
     SERVICE_SET_WINTER_MODE,
     SERVICE_SET_ZONE_DURATION,
@@ -39,7 +42,7 @@ SET_ZONE_DURATION_SCHEMA = vol.Schema(
     {
         vol.Required("entry_id"): cv.string,
         vol.Required("entity_id"): cv.entity_id,
-        vol.Required("minutes"): vol.All(vol.Coerce(int), vol.Range(min=1, max=180)),
+        vol.Required("minutes"): vol.All(vol.Coerce(int), vol.Range(min=1, max=MAX_ZONE_DURATION_MINUTES)),
     }
 )
 SET_ZONE_NAME_SCHEMA = vol.Schema(
@@ -55,10 +58,12 @@ SET_PAUSE_SCHEMA = vol.Schema(
         vol.Required("seconds"): vol.All(vol.Coerce(int), vol.Range(min=0, max=3600)),
     }
 )
-SET_START_TIME_SCHEMA = vol.Schema(
+SET_START_TIMES_SCHEMA = vol.Schema(
     {
         vol.Required("entry_id"): cv.string,
-        vol.Required("start_time"): cv.time,
+        vol.Required("start_times"): vol.All(
+            cv.ensure_list, [cv.time], vol.Length(min=MIN_START_TIMES, max=MAX_START_TIMES)
+        ),
     }
 )
 SET_RAIN_PAUSE_SCHEMA = vol.Schema(
@@ -148,9 +153,9 @@ def _async_register_services(hass: HomeAssistant) -> None:
         manager = _get_manager(hass, call.data["entry_id"])
         await manager.async_set_pause_between_zones(call.data["seconds"])
 
-    async def handle_set_start_time(call: ServiceCall) -> None:
+    async def handle_set_start_times(call: ServiceCall) -> None:
         manager = _get_manager(hass, call.data["entry_id"])
-        await manager.async_set_start_time(str(call.data["start_time"]))
+        await manager.async_set_start_times([str(t) for t in call.data["start_times"]])
 
     async def handle_set_rain_pause(call: ServiceCall) -> None:
         manager = _get_manager(hass, call.data["entry_id"])
@@ -198,7 +203,7 @@ def _async_register_services(hass: HomeAssistant) -> None:
         DOMAIN, SERVICE_SET_PAUSE_BETWEEN_ZONES, handle_set_pause, schema=SET_PAUSE_SCHEMA
     )
     hass.services.async_register(
-        DOMAIN, SERVICE_SET_START_TIME, handle_set_start_time, schema=SET_START_TIME_SCHEMA
+        DOMAIN, SERVICE_SET_START_TIMES, handle_set_start_times, schema=SET_START_TIMES_SCHEMA
     )
     hass.services.async_register(
         DOMAIN, SERVICE_SET_RAIN_PAUSE, handle_set_rain_pause, schema=SET_RAIN_PAUSE_SCHEMA
