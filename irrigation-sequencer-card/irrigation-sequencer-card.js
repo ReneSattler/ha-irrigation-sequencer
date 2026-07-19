@@ -159,6 +159,19 @@ class IrrigationSequencerBaseCard extends HTMLElement {
     this._config = config;
     if (!this.shadowRoot) {
       this.attachShadow({ mode: "open" });
+      // The hass setter fires on every state change anywhere in Home
+      // Assistant, not just this card's entity, and _render() replaces the
+      // whole innerHTML. Without this guard, opening a native picker (e.g.
+      // the Android time picker) gets destroyed mid-interaction by an
+      // unrelated update elsewhere in the house. Listeners live on
+      // shadowRoot itself, which innerHTML replacement never touches, so
+      // they survive every re-render.
+      this.shadowRoot.addEventListener("focusin", () => {
+        this._suppressRender = true;
+      });
+      this.shadowRoot.addEventListener("focusout", () => {
+        this._suppressRender = false;
+      });
     }
   }
 

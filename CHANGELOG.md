@@ -5,6 +5,15 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.3.2] - 2026-07-19
+
+- Fixed: any input in either card (night start time, weather entity, zone
+  name, temperature fields) could get wiped out mid-interaction - e.g. the
+  native Android time picker closing itself right after opening. Caused by
+  the card re-rendering its entire DOM on every Home Assistant state change
+  anywhere in the house, not just its own entity. Now suppressed while any
+  field inside the card has focus.
+
 ## [0.3.1] - 2026-07-19
 
 - Redesigned icon/logo artwork (flat illustrated sprinkler over soil with
