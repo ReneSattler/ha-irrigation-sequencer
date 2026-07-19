@@ -17,7 +17,7 @@ const DOMAIN = "irrigation_sequencer";
 // browser console, whether an update actually took effect versus just
 // looking "the same" as before. Keep this in step with manifest.json's
 // "version" on every release.
-const CARD_VERSION = "0.9.5";
+const CARD_VERSION = "0.9.6";
 // eslint-disable-next-line no-console
 console.info(
   `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
@@ -477,7 +477,7 @@ class IrrigationSequencerBaseCard extends HTMLElement {
         color: var(--tile-color, var(--primary-color)); }
       .tile-row-label { flex: 0 0 auto; min-width: 130px; font-size: 0.88em; color: var(--primary-text-color); }
       .tile-row-control { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
-      .tile-row-control input[type="range"] { flex: 1; accent-color: var(--tile-color, var(--primary-color)); height: 6px; }
+      .tile-row-control input[type="range"] { flex: 1; accent-color: var(--tile-color, var(--primary-color)); height: 6px; touch-action: none; }
       .tile-row-control input[type="number"],
       .tile-row-control input[type="time"],
       .tile-row-control input[type="text"],

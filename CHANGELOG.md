@@ -5,6 +5,20 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.9.6] - 2026-07-20
+
+- Attempted fix for the zone-duration slider still losing focus and
+  snapping back to its old value on Android, after v0.9.1/v0.9.4 fixed
+  other cases in the same area: added `touch-action: none` to
+  `.tile-row-control input[type="range"]`. Sliders sit inside a vertically
+  scrollable settings card, and without an explicit `touch-action`, some
+  Android WebViews can misinterpret a horizontal drag as an attempted page
+  scroll partway through, canceling the native slider drag and reverting
+  its value before "change" even fires - independent of anything the card
+  itself does with render suppression. Couldn't be reproduced/verified in
+  a desktop testing environment; needs live confirmation. See
+  [#25](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/25).
+
 ## [0.9.5] - 2026-07-20
 
 - Fixed the forecast stat tile still overflowing the card width on narrow
