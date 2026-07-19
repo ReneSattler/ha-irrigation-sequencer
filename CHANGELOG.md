@@ -5,6 +5,16 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.8.1] - 2026-07-19
+
+- **Fixed**: the "Today's forecast high" stat could silently disappear on
+  real instances - modern weather integrations (e.g. Met.no, DWD) dropped
+  the legacy `forecast` state attribute the card relied on, in favor of the
+  `weather.get_forecasts` action. The card now fetches the forecast through
+  that action (cached per entity for 10 minutes, re-rendering once it
+  resolves), falling back to the legacy attribute first for integrations
+  that still expose it. Fixes [#10](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/10).
+
 ## [0.8.0] - 2026-07-19
 
 - `light` domain support (added for testing) is now a permanent option,
