@@ -83,7 +83,7 @@ set_start_times:
 
 set_rain_pause:
   name: Set rain pause
-  description: Pauses irrigation for 1-14 days (e.g. after rainfall).
+  description: Pauses irrigation for 1-24 days (e.g. after rainfall).
   fields:
     entry_id:
       required: true
@@ -94,7 +94,7 @@ set_rain_pause:
       selector:
         number:
           min: 1
-          max: 14
+          max: 24
           unit_of_measurement: days
 
 clear_rain_pause:
