@@ -10,6 +10,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import (
     ATTR_CURRENT_ZONE_ENTITY_ID,
     ATTR_CURRENT_ZONE_INDEX,
+    ATTR_ESTIMATED_TOTAL_SECONDS,
     ATTR_LAST_ZONE_INDEX,
     ATTR_NEXT_RUN,
     ATTR_PAUSE_BETWEEN_ZONES_SECONDS,
@@ -83,6 +84,7 @@ class IrrigationSequencerStatusSensor(Entity):
             ATTR_SECONDS_REMAINING_ZONE: self._manager.seconds_remaining_zone,
             ATTR_SECONDS_REMAINING_TOTAL: self._manager.seconds_remaining_total,
             ATTR_NEXT_RUN: self._manager.next_run,
+            ATTR_ESTIMATED_TOTAL_SECONDS: self._manager.estimated_total_seconds,
             ATTR_WEATHER_ADJUSTMENT_ENABLED: self._manager.weather_adjustment_enabled,
             ATTR_WEATHER_ENTITY: self._manager.weather_entity,
             ATTR_WEATHER_REFERENCE_TEMP: self._manager.weather_reference_temp,

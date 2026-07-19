@@ -5,6 +5,18 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.8.0] - 2026-07-19
+
+- `light` domain support (added for testing) is now a permanent option,
+  not a temporary allowance - decided in #4.
+- **Overlap protection for start times**: with 1-3 daily start times, two of
+  them landing closer together than a full sequence takes to run (estimated
+  from currently configured zone durations + pauses) is now rejected with a
+  clear message naming the two conflicting times, both server-side
+  (`manager.async_set_start_times`, surfaced as a proper validation error)
+  and client-side in the settings card (immediate inline warning, no
+  service call made at all if it would overlap).
+
 ## [0.7.1] - 2026-07-19
 
 - Refreshed all README screenshots to match the current UI (icon, rain-pause

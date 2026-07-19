@@ -26,6 +26,8 @@ const TRANSLATIONS = {
     pauseBetweenZones: "Pause between zones",
     nightStart: "Night start",
     addTime: "Add time",
+    startTimesOverlap: (a, b, minutes) =>
+      `${a} and ${b} are too close together (a full run currently takes about ${minutes} min) - they would overlap. Not saved.`,
     winterMode: "Winter mode",
     rainPause: "Rain pause",
     rainPauseClear: (until) => `until ${until} · clear`,
@@ -70,6 +72,8 @@ const TRANSLATIONS = {
     pauseBetweenZones: "Pause zwischen Zonen",
     nightStart: "Nachtstart",
     addTime: "Zeit hinzufügen",
+    startTimesOverlap: (a, b, minutes) =>
+      `${a} und ${b} liegen zu nah beieinander (ein Durchlauf dauert aktuell ca. ${minutes} min) - sie würden sich überschneiden. Nicht gespeichert.`,
     winterMode: "Wintermodus",
     rainPause: "Regen-Pause",
     rainPauseClear: (until) => `bis ${until} · aufheben`,
@@ -714,7 +718,28 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
       times.length < MAX_START_TIMES
         ? `<button class="chip" id="add-start-time">+ ${t.addTime}</button>`
         : "";
-    return rows + addButton;
+    return `${rows}${addButton}<div id="start-times-warning" style="display:none; color: var(--error-color, #db4437); font-size: 0.8em;"></div>`;
+  }
+
+  /** Same overlap rule the backend enforces (manager._raise_if_start_times_overlap),
+   * checked client-side first so the user gets immediate inline feedback
+   * instead of only a service-call error toast after the fact. */
+  _findOverlappingStartTimes(times, estimatedTotalSeconds) {
+    if (times.length < 2) return null;
+    const toSeconds = (value) => {
+      const [h, m, s] = value.split(":").map(Number);
+      return h * 3600 + m * 60 + (s || 0);
+    };
+    const sorted = [...times].sort();
+    const seconds = sorted.map(toSeconds);
+    for (let i = 0; i < seconds.length; i++) {
+      const nextIndex = (i + 1) % seconds.length;
+      const gap = ((seconds[nextIndex] - seconds[i]) % 86400 + 86400) % 86400;
+      if (gap < estimatedTotalSeconds) {
+        return [sorted[i], sorted[nextIndex]];
+      }
+    }
+    return null;
   }
 
   _renderWeatherSection(attrs, t) {
@@ -790,6 +815,15 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
     });
 
     const submitStartTimes = (times) => {
+      const warningEl = root.getElementById("start-times-warning");
+      const estimatedTotalSeconds = this._entityState().attributes.estimated_total_seconds || 0;
+      const overlap = this._findOverlappingStartTimes(times, estimatedTotalSeconds);
+      if (overlap) {
+        warningEl.textContent = t.startTimesOverlap(overlap[0].slice(0, 5), overlap[1].slice(0, 5), Math.round(estimatedTotalSeconds / 60));
+        warningEl.style.display = "block";
+        return;
+      }
+      warningEl.style.display = "none";
       this._releaseRenderSuppression();
       this._callService("set_start_times", { start_times: times });
     };
