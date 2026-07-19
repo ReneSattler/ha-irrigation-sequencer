@@ -17,7 +17,7 @@ const DOMAIN = "irrigation_sequencer";
 // browser console, whether an update actually took effect versus just
 // looking "the same" as before. Keep this in step with manifest.json's
 // "version" on every release.
-const CARD_VERSION = "0.9.4";
+const CARD_VERSION = "0.9.5";
 // eslint-disable-next-line no-console
 console.info(
   `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
@@ -154,6 +154,19 @@ function formatSeconds(totalSeconds) {
   const m = Math.floor(s / 60);
   const rem = s % 60;
   return `${m}:${rem.toString().padStart(2, "0")} min`;
+}
+
+/** Rounds a stored value to the nearest multiple of a slider's step size.
+ * A range input's own snap-while-dragging behavior always lands on a clean
+ * multiple of `step` from `min`, but a *stored* value can predate a step
+ * change (e.g. seconds-granularity data from before pause-between-zones
+ * switched to whole-minute steps) or otherwise not be step-aligned. Some
+ * browsers/WebViews then snap relative to that already-off-grid value
+ * instead of to min when the user next drags it, producing odd results
+ * (e.g. dragging down two 60s steps from a stored 170 landing on 50
+ * instead of 60) - rendering an always-aligned value sidesteps that. */
+function roundToStep(value, step) {
+  return Math.round((value || 0) / step) * step;
 }
 
 function friendlyName(hass, entityId) {
@@ -514,8 +527,8 @@ class IrrigationSequencerBaseCard extends HTMLElement {
       .timeline-legend span { display: inline-flex; align-items: center; gap: 4px; }
       .timeline-legend i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
 
-      .stat-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
-      .stat { flex: 1; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px;
+      .stat-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 10px; }
+      .stat { flex: 1 1 130px; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px;
         background: var(--secondary-background-color, rgba(127,127,127,0.08)); min-width: 0; }
       .stat ha-icon { color: var(--tile-color, var(--primary-color)); flex-shrink: 0; }
       .stat-value { font-size: 0.92em; font-weight: 600; color: var(--primary-text-color); overflow-wrap: break-word; word-break: break-word; }
@@ -708,8 +721,8 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
             <div class="tile-row-icon"><ha-icon icon="mdi:timer-sand"></ha-icon></div>
             <div class="tile-row-label">${t.pauseBetweenZones}</div>
             <div class="tile-row-control">
-              <input type="range" min="0" max="900" step="60" value="${attrs.pause_between_zones_seconds}" id="pause-range" />
-              <span class="tile-row-value">${formatSeconds(attrs.pause_between_zones_seconds)}</span>
+              <input type="range" min="0" max="900" step="60" value="${roundToStep(attrs.pause_between_zones_seconds, 60)}" id="pause-range" />
+              <span class="tile-row-value">${formatSeconds(roundToStep(attrs.pause_between_zones_seconds, 60))}</span>
             </div>
           </div>
           <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4); align-items: flex-start;">
