@@ -184,7 +184,7 @@
       language: lang,
       locale: { language: lang },
       states,
-      callService: () => {},
+      callService: () => Promise.resolve(),
     };
 
     const statusTitle = lang === "de" ? "Rasenbewässerung" : "Lawn Irrigation";
