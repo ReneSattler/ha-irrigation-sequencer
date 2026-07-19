@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Callable
 
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
@@ -20,6 +21,7 @@ from .const import (
     DEFAULT_ZONE_DURATION_MINUTES,
     MAX_START_TIMES,
     MAX_WEATHER_FACTOR,
+    MIN_START_TIMES,
     MIN_WEATHER_FACTOR,
     STATE_IDLE,
     STATE_PAUSED_BETWEEN_ZONES,
@@ -192,12 +194,41 @@ class IrrigationSequencerManager:
         self._notify_listeners()
 
     async def async_set_start_times(self, start_times: list[str]) -> None:
-        if not 1 <= len(start_times) <= MAX_START_TIMES:
-            raise ValueError(f"start_times must have 1-{MAX_START_TIMES} entries")
-        self.start_times = sorted(start_times)
+        if not MIN_START_TIMES <= len(start_times) <= MAX_START_TIMES:
+            raise ServiceValidationError(
+                f"start_times must have {MIN_START_TIMES}-{MAX_START_TIMES} entries"
+            )
+        sorted_times = sorted(start_times)
+        self._raise_if_start_times_overlap(sorted_times)
+        self.start_times = sorted_times
         await self._async_save()
         self._schedule_daily_trigger()
         self._notify_listeners()
+
+    def _raise_if_start_times_overlap(self, sorted_times: list[str]) -> None:
+        """Reject start times closer together than a full sequence takes to
+        run. The duration is an estimate from the currently configured zone
+        durations/pauses (unadjusted by weather, which varies at runtime and
+        can't be known in advance) - good enough to catch the common case of
+        two triggers landing on top of each other."""
+        if len(sorted_times) < 2:
+            return
+
+        def to_seconds(value: str) -> int:
+            hour, minute, second = (int(part) for part in value.split(":"))
+            return hour * 3600 + minute * 60 + second
+
+        duration = self.estimated_total_seconds
+        seconds = [to_seconds(t) for t in sorted_times]
+        for index, current in enumerate(seconds):
+            next_index = (index + 1) % len(seconds)
+            gap = (seconds[next_index] - current) % 86400
+            if gap < duration:
+                raise ServiceValidationError(
+                    f"Start times {sorted_times[index]} and {sorted_times[next_index]} are only "
+                    f"{gap // 60} min apart, but a full sequence currently takes about "
+                    f"{duration // 60} min - they would overlap."
+                )
 
     async def async_set_winter_mode(self, enabled: bool) -> None:
         self.winter_mode = enabled
@@ -349,6 +380,16 @@ class IrrigationSequencerManager:
     def _zone_duration_seconds(self, zone: dict[str, Any]) -> int:
         base_seconds = zone["duration_minutes"] * 60
         return max(1, round(base_seconds * self.weather_current_factor))
+
+    @property
+    def estimated_total_seconds(self) -> int:
+        """Sequence duration estimate from the currently configured zone
+        durations and pauses, without the weather factor (unknowable ahead
+        of the actual run). Used for the start-times overlap check and
+        exposed to the card for the same client-side check."""
+        return sum(zone["duration_minutes"] * 60 for zone in self.zones) + (
+            self.pause_between_zones_seconds * max(0, len(self.zones) - 1)
+        )
 
     async def _async_run_sequence(self) -> None:
         total_seconds = sum(

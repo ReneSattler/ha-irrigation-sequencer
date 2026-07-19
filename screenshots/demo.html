@@ -152,6 +152,12 @@
       weather_current_temp: 27,
       weather_current_factor: 1.7,
     };
+    const recomputeEstimatedTotalSeconds = () => {
+      statusAttrs.estimated_total_seconds =
+        statusAttrs.zones.reduce((sum, z) => sum + z.duration_minutes * 60, 0) +
+        statusAttrs.pause_between_zones_seconds * Math.max(0, statusAttrs.zones.length - 1);
+    };
+    recomputeEstimatedTotalSeconds();
 
     const states = {
       "sensor.lawn_irrigation_status": {
@@ -205,9 +211,15 @@
       if (domain !== "irrigation_sequencer") return;
       const zone = (id) => statusAttrs.zones.find((z) => z.entity_id === id);
       if (service === "set_start_times") statusAttrs.start_times = data.start_times;
-      if (service === "set_zone_duration" && zone(data.entity_id)) zone(data.entity_id).duration_minutes = data.minutes;
+      if (service === "set_zone_duration" && zone(data.entity_id)) {
+        zone(data.entity_id).duration_minutes = data.minutes;
+        recomputeEstimatedTotalSeconds();
+      }
       if (service === "set_zone_name" && zone(data.entity_id)) zone(data.entity_id).name = data.name;
-      if (service === "set_pause_between_zones") statusAttrs.pause_between_zones_seconds = data.seconds;
+      if (service === "set_pause_between_zones") {
+        statusAttrs.pause_between_zones_seconds = data.seconds;
+        recomputeEstimatedTotalSeconds();
+      }
       if (service === "set_rain_pause") {
         const d = new Date();
         d.setDate(d.getDate() + data.days);

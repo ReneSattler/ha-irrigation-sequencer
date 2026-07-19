@@ -39,7 +39,7 @@ im Browser ausprobieren kannst.*
   die Reihenfolge lässt sich in der Settings-Card per Drag & Drop ändern
 - **Individuelle Dauer pro Zone** – jede Zone hat ihre eigene Bewässerungsdauer (Minuten)
 - **Pause zwischen den Zonen** – konfigurierbare Wartezeit, bevor die nächste Zone startet
-- **1–3 tägliche Startzeiten** – z. B. ein früher und ein später Lauf am Tag, jede startet unabhängig eine vollständige Sequenz
+- **1–3 tägliche Startzeiten** – z. B. ein früher und ein später Lauf am Tag, jede startet unabhängig eine vollständige Sequenz. Zeiten, die sich überschneiden würden (näher beieinander als ein Durchlauf dauert), werden mit klarer Meldung abgelehnt – sowohl in der Card als auch bei Nutzung des Service.
 - **Wintermodus** – ein Schalter, der die gesamte Bewässerung komplett deaktiviert
 - **Regen-Pause** – die Sequenz für 1 bis 14 Tage manuell aussetzen (z. B. nach Regen),
   danach läuft der normale Zeitplan automatisch wieder
@@ -57,9 +57,10 @@ im Browser ausprobieren kannst.*
 Die Integration steuert vorhandene `switch`- oder `valve`-Entitäten (z. B.
 Shelly-Relais, smarte Steckdosen, native HA-Ventile). Sie bringt selbst keine
 Hardware-Anbindung mit – lege deine Ventile/Steckdosen vorher wie gewohnt in
-Home Assistant an. `light`-Entitäten werden ebenfalls akzeptiert, rein zum
-einfacheren Testen (z. B. eine Lampe, wenn gerade kein echtes Ventil zur Hand
-ist) – siehe [Issue #4](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/4).
+Home Assistant an. `light`-Entitäten werden ebenfalls akzeptiert – praktisch
+zum Testen mit einer Lampe, wenn gerade kein echtes Ventil zur Hand ist, und
+dauerhaft als Option zum Experimentieren erhalten, auch wenn es nicht der
+Hauptanwendungsfall ist.
 
 ## Installation über HACS
 

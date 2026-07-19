@@ -37,7 +37,7 @@ Home Assistant instance.*
   can be changed by drag & drop directly in the settings card
 - **Per-zone duration** - every zone has its own irrigation duration (minutes)
 - **Pause between zones** - configurable wait time before the next zone starts
-- **1-3 daily start times** - e.g. an early-morning and a late-evening run, each independently triggering a full sequence
+- **1-3 daily start times** - e.g. an early-morning and a late-evening run, each independently triggering a full sequence. Times that would overlap (closer together than a full run takes) are rejected with a clear message, both in the card and if set via the service.
 - **Winter mode** - a single switch that fully disables irrigation
 - **Rain pause** - manually pause the sequence for 1 to 14 days (e.g. after
   rainfall); the normal schedule resumes automatically afterwards
@@ -54,9 +54,9 @@ Home Assistant instance.*
 The integration controls existing `switch` or `valve` entities (e.g. Shelly
 relays, smart plugs, native HA valves). It does not provide any hardware
 integration itself - set up your valves/plugs in Home Assistant as usual
-first. `light` entities are also accepted, purely for testing convenience
-(e.g. a lamp when you don't have a real valve handy) - see
-[issue #4](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/4).
+first. `light` entities are also accepted - handy for testing with a lamp
+when you don't have a real valve on hand, and kept as a permanent option
+for experimenting even though it isn't the primary use case.
 
 ## Installation via HACS
 
