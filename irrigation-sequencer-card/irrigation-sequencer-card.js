@@ -219,7 +219,12 @@ class IrrigationSequencerBaseCard extends HTMLElement {
     clearTimeout(this._suppressRenderTimeout);
     this._suppressRenderTimeout = setTimeout(() => {
       this._suppressRender = false;
-      this._render();
+      // Don't force a rebuild while the user is still actively focused on a
+      // field (e.g. still typing a zone name) - _isEditingField() in the
+      // hass setter keeps blocking renders until they actually leave it.
+      if (!this._isEditingField()) {
+        this._render();
+      }
     }, delayMs);
   }
 
@@ -231,9 +236,18 @@ class IrrigationSequencerBaseCard extends HTMLElement {
     this._scheduleRenderResume(1000);
   }
 
+  /** True while an input/select/textarea inside this card's shadow root has
+   * focus. Belt-and-suspenders alongside _suppressRender: whatever the
+   * timing of the pointerdown/change-driven flag, never blow away a field
+   * the user is actually, currently typing into. */
+  _isEditingField() {
+    const active = this.shadowRoot?.activeElement;
+    return !!active && active.matches?.("input, select, textarea");
+  }
+
   set hass(hass) {
     this._hass = hass;
-    if (!this._suppressRender) {
+    if (!this._suppressRender && !this._isEditingField()) {
       this._render();
     }
   }
@@ -616,19 +630,16 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
           <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4); align-items: flex-start;">
             <div class="tile-row-icon"><ha-icon icon="mdi:weather-rainy"></ha-icon></div>
             <div class="tile-row-label">${t.rainPause}</div>
-            <div class="tile-row-control" style="flex-wrap: wrap;">
-              <div class="chip-row" style="margin-top:0;">
-                ${[1, 3, 7, 14]
-                  .map(
-                    (d) => `<button class="chip" data-days="${d}">${d} ${d > 1 ? t.days : t.day}</button>`
-                  )
-                  .join("")}
-                ${
-                  attrs.rain_pause_until
-                    ? `<button class="chip chip-clear" id="clear-rain">${t.rainPauseClear(attrs.rain_pause_until)}</button>`
-                    : ""
-                }
+            <div class="tile-row-control" style="flex-direction: column; align-items: stretch; gap: 8px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <input type="range" min="1" max="14" step="1" id="rain-pause-days" value="${this._rainPauseDefaultDays(attrs)}" />
+                <span class="tile-row-value" id="rain-pause-days-value">${this._rainPauseDefaultDays(attrs)} ${this._rainPauseDefaultDays(attrs) > 1 ? t.days : t.day}</span>
               </div>
+              ${
+                attrs.rain_pause_until
+                  ? `<div class="chip-row" style="margin-top:0;"><button class="chip chip-clear" id="clear-rain">${t.rainPauseClear(attrs.rain_pause_until)}</button></div>`
+                  : ""
+              }
             </div>
           </div>
 
@@ -654,6 +665,18 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
         </div>
       </div>
     `;
+  }
+
+  /** Slider default: days remaining on an active rain pause, otherwise a
+   * reasonable starting point. Always clamped to the 1-14 range. */
+  _rainPauseDefaultDays(attrs) {
+    if (attrs.rain_pause_until) {
+      const remaining = Math.ceil(
+        (new Date(attrs.rain_pause_until) - new Date()) / 86400000
+      );
+      return Math.min(14, Math.max(1, remaining));
+    }
+    return 3;
   }
 
   /** Two plain number inputs (hour/minute) instead of <input type="time">.
@@ -766,11 +789,14 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
       this._callService("set_pause_between_zones", { seconds: parseInt(e.target.value, 10) });
     });
 
-    root.querySelectorAll(".chip[data-days]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        this._releaseRenderSuppression();
-        this._callService("set_rain_pause", { days: parseInt(btn.dataset.days, 10) });
-      });
+    const rainPauseDays = root.getElementById("rain-pause-days");
+    rainPauseDays?.addEventListener("input", (e) => {
+      const days = parseInt(e.target.value, 10);
+      root.getElementById("rain-pause-days-value").textContent = `${days} ${days > 1 ? t.days : t.day}`;
+    });
+    rainPauseDays?.addEventListener("change", (e) => {
+      this._releaseRenderSuppression();
+      this._callService("set_rain_pause", { days: parseInt(e.target.value, 10) });
     });
     root.getElementById("clear-rain")?.addEventListener("click", () => {
       this._releaseRenderSuppression();
@@ -892,16 +918,23 @@ class IrrigationSequencerCardEditorBase extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    if (!this._suppressRender) {
+    if (!this._suppressRender && !this._isEditingField()) {
       this._render();
     }
+  }
+
+  _isEditingField() {
+    const active = this.shadowRoot?.activeElement;
+    return !!active && active.matches?.("input, select, textarea");
   }
 
   _scheduleRenderResume(delayMs) {
     clearTimeout(this._suppressRenderTimeout);
     this._suppressRenderTimeout = setTimeout(() => {
       this._suppressRender = false;
-      this._render();
+      if (!this._isEditingField()) {
+        this._render();
+      }
     }, delayMs);
   }
 
