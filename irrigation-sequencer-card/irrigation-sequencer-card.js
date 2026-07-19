@@ -182,34 +182,53 @@ class IrrigationSequencerBaseCard extends HTMLElement {
       // they survive every re-render.
       //
       // Suppression starts as soon as a pointer/keyboard interaction begins
-      // (pointerdown/focusin) and is only lifted once the specific field's
-      // own "change" handler runs (the value was actually committed) or a
-      // safety timeout fires. It is deliberately NOT lifted on blur/focusout:
-      // Android's native time picker is a real OS dialog, so the underlying
-      // <input> loses DOM focus the instant it opens - long before the user
-      // has picked anything - and clearing suppression there would re-open
-      // the exact race this guard exists to close.
-      const suppress = () => {
-        this._suppressRender = true;
-        clearTimeout(this._suppressRenderTimeout);
-        this._suppressRenderTimeout = setTimeout(() => {
-          this._suppressRender = false;
-        }, 60000);
-      };
+      // (pointerdown/focusin) and is only lifted - via _scheduleRenderResume -
+      // once the specific field's own "change" handler runs (the value was
+      // actually committed) or a safety timeout fires. It is deliberately NOT
+      // lifted on blur/focusout: Android's native time picker is a real OS
+      // dialog, so the underlying <input> loses DOM focus the instant it
+      // opens - long before the user has picked anything - and clearing
+      // suppression there would re-open the exact race this guard exists to
+      // close.
       this.shadowRoot.addEventListener("pointerdown", (e) => {
-        if (e.target.closest?.("input, select, textarea")) suppress();
+        if (e.target.closest?.("input, select, textarea")) {
+          this._suppressRender = true;
+          this._scheduleRenderResume(60000);
+        }
       });
       this.shadowRoot.addEventListener("focusin", (e) => {
-        if (e.target.matches?.("input, select, textarea")) suppress();
+        if (e.target.matches?.("input, select, textarea")) {
+          this._suppressRender = true;
+          this._scheduleRenderResume(60000);
+        }
       });
     }
   }
 
-  /** Call at the top of a field's "change" handler once its value has been
-   * committed, so the next hass update is allowed to re-render again. */
-  _releaseRenderSuppression() {
-    this._suppressRender = false;
+  /** Resumes rendering (and forces one fresh render right away) after
+   * delayMs. Used both as the long safety net while a field is being
+   * edited, and - via _releaseRenderSuppression - as a short buffer after a
+   * value is committed: calling a service is async, so re-rendering the
+   * instant "change" fires would rebuild the DOM from attributes that
+   * haven't caught up with our own edit yet, which looks like the value
+   * snapping back to its old number for a moment. Waiting lets the
+   * round-trip land first. this._hass itself keeps updating during
+   * suppression regardless - only the DOM rebuild is deferred - so the
+   * forced render here already reflects the latest state. */
+  _scheduleRenderResume(delayMs) {
     clearTimeout(this._suppressRenderTimeout);
+    this._suppressRenderTimeout = setTimeout(() => {
+      this._suppressRender = false;
+      this._render();
+    }, delayMs);
+  }
+
+  /** Call at the top of a field's "change" handler once its value has been
+   * committed. Leaves rendering suppressed for a short buffer (see
+   * _scheduleRenderResume) rather than lifting it immediately, so the
+   * pending service call has time to round-trip before the DOM rebuilds. */
+  _releaseRenderSuppression() {
+    this._scheduleRenderResume(1000);
   }
 
   set hass(hass) {
@@ -890,26 +909,32 @@ class IrrigationSequencerCardEditorBase extends HTMLElement {
     }
   }
 
-  _releaseRenderSuppression() {
-    this._suppressRender = false;
+  _scheduleRenderResume(delayMs) {
     clearTimeout(this._suppressRenderTimeout);
+    this._suppressRenderTimeout = setTimeout(() => {
+      this._suppressRender = false;
+      this._render();
+    }, delayMs);
+  }
+
+  _releaseRenderSuppression() {
+    this._scheduleRenderResume(1000);
   }
 
   _render() {
     if (!this.shadowRoot) {
       this.attachShadow({ mode: "open" });
-      const suppress = () => {
-        this._suppressRender = true;
-        clearTimeout(this._suppressRenderTimeout);
-        this._suppressRenderTimeout = setTimeout(() => {
-          this._suppressRender = false;
-        }, 60000);
-      };
       this.shadowRoot.addEventListener("pointerdown", (e) => {
-        if (e.target.closest?.("input, select, textarea")) suppress();
+        if (e.target.closest?.("input, select, textarea")) {
+          this._suppressRender = true;
+          this._scheduleRenderResume(60000);
+        }
       });
       this.shadowRoot.addEventListener("focusin", (e) => {
-        if (e.target.matches?.("input, select, textarea")) suppress();
+        if (e.target.matches?.("input, select, textarea")) {
+          this._suppressRender = true;
+          this._scheduleRenderResume(60000);
+        }
       });
     }
     const t = getTranslations(this._hass);
