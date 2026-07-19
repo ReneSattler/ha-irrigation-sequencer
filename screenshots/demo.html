@@ -188,6 +188,48 @@
     statusCard.setConfig({ entity: "sensor.lawn_irrigation_status", title: statusTitle, layout });
     statusCard.hass = hass;
 
+    // Stateful mock so demo.html is actually interactive: services below
+    // mutate statusAttrs and push a fresh hass object to both cards, the
+    // same round trip a real Home Assistant instance does after a service
+    // call updates the sensor.
+    const pushHassUpdate = () => {
+      hass.states["sensor.lawn_irrigation_status"] = {
+        ...hass.states["sensor.lawn_irrigation_status"],
+        attributes: { ...statusAttrs },
+      };
+      const nextHass = { ...hass, states: { ...hass.states } };
+      statusCard.hass = nextHass;
+      settingsCard.hass = nextHass;
+    };
+    hass.callService = (domain, service, data) => {
+      if (domain !== "irrigation_sequencer") return;
+      const zone = (id) => statusAttrs.zones.find((z) => z.entity_id === id);
+      if (service === "set_start_times") statusAttrs.start_times = data.start_times;
+      if (service === "set_zone_duration" && zone(data.entity_id)) zone(data.entity_id).duration_minutes = data.minutes;
+      if (service === "set_zone_name" && zone(data.entity_id)) zone(data.entity_id).name = data.name;
+      if (service === "set_pause_between_zones") statusAttrs.pause_between_zones_seconds = data.seconds;
+      if (service === "set_rain_pause") {
+        const d = new Date();
+        d.setDate(d.getDate() + data.days);
+        statusAttrs.rain_pause_until = d.toISOString().slice(0, 10);
+      }
+      if (service === "clear_rain_pause") statusAttrs.rain_pause_until = null;
+      if (service === "set_winter_mode") statusAttrs.winter_mode = data.enabled;
+      if (service === "set_weather_adjustment") {
+        Object.assign(statusAttrs, {
+          weather_adjustment_enabled: data.enabled,
+          weather_entity: data.weather_entity,
+          weather_reference_temp: data.reference_temp,
+          weather_hot_temp: data.hot_temp,
+          weather_hot_factor: data.hot_factor,
+        });
+      }
+      if (service === "set_zone_order") {
+        statusAttrs.zones = data.zones.map((id, i) => ({ ...zone(id), position: i }));
+      }
+      pushHassUpdate();
+    };
+
     const settingsCard = document.getElementById("settings-card");
     settingsCard.setConfig({ entity: "sensor.lawn_irrigation_status", title: settingsTitle, layout });
     settingsCard.hass = hass;

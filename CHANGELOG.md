@@ -5,6 +5,16 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.7.1] - 2026-07-19
+
+- Refreshed all README screenshots to match the current UI (icon, rain-pause
+  slider, multi start-time rows).
+- `screenshots/demo.html`'s mock is now genuinely stateful/interactive:
+  service calls (zone order/name/duration, pause, start times, winter mode,
+  rain pause, weather adjustment) actually mutate the mock sensor and push
+  the update back to both cards, instead of being no-ops. Verified 1-3
+  start times can be edited and removed back down to 1 through it.
+
 ## [0.7.0] - 2026-07-19
 
 - **Fixed**: the zone-name field (and other row content) could lose focus
