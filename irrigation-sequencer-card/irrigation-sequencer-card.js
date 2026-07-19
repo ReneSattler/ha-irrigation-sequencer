@@ -100,8 +100,22 @@ const TRANSLATIONS = {
   },
 };
 
+function resolveLanguage(hass) {
+  // hass.language was the original field; newer frontends moved language
+  // to hass.locale.language and may drop the old alias entirely. Falling
+  // back to the <html lang="..."> attribute HA sets on the top-level page
+  // covers that regardless of which (if either) hass field still exists.
+  return (
+    hass?.locale?.language ||
+    hass?.language ||
+    hass?.selectedLanguage ||
+    document?.documentElement?.lang ||
+    "en"
+  );
+}
+
 function getTranslations(hass) {
-  const lang = (hass?.language || hass?.locale?.language || "en").split("-")[0];
+  const lang = resolveLanguage(hass).split("-")[0];
   return TRANSLATIONS[lang] || TRANSLATIONS.en;
 }
 
@@ -455,7 +469,7 @@ class IrrigationSequencerStatusCard extends IrrigationSequencerBaseCard {
             : `<div class="stat" style="--tile-color: var(--info-color, #03a9f4)">
                 <ha-icon icon="mdi:calendar-clock"></ha-icon>
                 <div>
-                  <div class="stat-value">${attrs.next_run ? new Date(attrs.next_run).toLocaleString(this._hass.language, { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "-"}</div>
+                  <div class="stat-value">${attrs.next_run ? new Date(attrs.next_run).toLocaleString(resolveLanguage(this._hass), { weekday: "short", hour: "2-digit", minute: "2-digit" }) : "-"}</div>
                   <div class="stat-label">${t.nextRun}</div>
                 </div>
               </div>`
