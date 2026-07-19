@@ -25,7 +25,7 @@ DEFAULT_NAME_BY_LANGUAGE = {
 }
 
 MIN_RAIN_PAUSE_DAYS = 1
-MAX_RAIN_PAUSE_DAYS = 14
+MAX_RAIN_PAUSE_DAYS = 24
 
 # Weather-based duration adjustment: linear interpolation between
 # (reference_temp -> factor 1.0) and (hot_temp -> hot_factor), extrapolated

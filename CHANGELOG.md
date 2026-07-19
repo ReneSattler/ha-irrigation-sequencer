@@ -5,6 +5,42 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.9.0] - 2026-07-19
+
+- Renamed "Night start" / "Nachtstart" to "Automatic start" / "Automatischer
+  Start" - a scheduled start isn't necessarily at night. Fixes [#12](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/12).
+- **Rain pause overhauled**: range extended from 1-14 to 1-24 days
+  (`set_rain_pause` service and slider), and the slider now goes down to 0,
+  where 0 means "off" and directly clears an active pause - no more need to
+  separately find the clear button just to turn it back off. Fixes
+  [#11](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/11), [#17](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/17).
+- Pause-between-zones slider now steps in whole minutes instead of 10-second
+  increments. Fixes [#21](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/21).
+- Zone name fields in the settings card are now pre-filled with the
+  underlying entity's current name (still fully editable) instead of
+  starting blank, both initially and whenever the field is cleared back out
+  - makes it possible to tell zones apart at a glance when testing with
+    similarly-generic entities. Fixes [#13](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/13).
+- Card now logs its version to the browser console on load, and the manual
+  installation docs recommend a `?v=...` cache-busting query string on the
+  resource URL - plain `.js` Lovelace resources can otherwise be cached
+  indefinitely by browsers (especially mobile), silently serving a stale
+  copy after an update with no visible sign anything is wrong. Fixes
+  [#20](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/20).
+- German config flow dialog title no longer embeds the English product name
+  ("Irrigation Sequencer einrichten" -> "Bewässerungssequenzer
+  einrichten"). The integration's name in the "Add Integration" search and
+  the Devices & Services overview still can't be localized - that comes
+  directly from `manifest.json` in stock Home Assistant with no per-language
+  override for private integrations, the same constraint already documented
+  for the missing brand icon. Fixes [#18](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/18).
+- Investigated three more reports that turned out not to reproduce against
+  the current code when tested directly (live focus/typing simulation for
+  the zone-name field, and direct service calls for winter mode on/off both
+  via the dedicated service and the raw switch entity) - all evidence points
+  to stale cached card JS rather than real bugs, consistent with #20.
+  Closed [#14](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/14), [#16](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/16).
+
 ## [0.8.1] - 2026-07-19
 
 - **Fixed**: the "Today's forecast high" stat could silently disappear on

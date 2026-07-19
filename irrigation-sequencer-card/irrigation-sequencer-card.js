@@ -11,6 +11,20 @@
 
 const DOMAIN = "irrigation_sequencer";
 
+// Plain script resources (no build step) are easy for browsers/mobile to
+// cache indefinitely across updates, with no visible sign anything is
+// stale - logging the version on load gives a quick way to check, in the
+// browser console, whether an update actually took effect versus just
+// looking "the same" as before. Keep this in step with manifest.json's
+// "version" on every release.
+const CARD_VERSION = "0.9.0";
+// eslint-disable-next-line no-console
+console.info(
+  `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
+  "color: white; background: #4caf50; font-weight: 700;",
+  "color: #4caf50; background: transparent; font-weight: 700;"
+);
+
 const TRANSLATIONS = {
   en: {
     status: {
@@ -24,13 +38,14 @@ const TRANSLATIONS = {
     settingsCardTitle: "Irrigation settings",
     zonesLabel: (n) => `${n} zones`,
     pauseBetweenZones: "Pause between zones",
-    nightStart: "Night start",
+    nightStart: "Automatic start",
     addTime: "Add time",
     startTimesOverlap: (a, b, minutes) =>
       `${a} and ${b} are too close together (a full run currently takes about ${minutes} min) - they would overlap. Not saved.`,
     winterMode: "Winter mode",
     rainPause: "Rain pause",
     rainPauseClear: (until) => `until ${until} · clear`,
+    rainPauseOff: "Off",
     days: "days",
     day: "day",
     weatherAdjustment: "Weather-based duration",
@@ -70,13 +85,14 @@ const TRANSLATIONS = {
     settingsCardTitle: "Bewässerungseinstellungen",
     zonesLabel: (n) => `${n} Zonen`,
     pauseBetweenZones: "Pause zwischen Zonen",
-    nightStart: "Nachtstart",
+    nightStart: "Automatischer Start",
     addTime: "Zeit hinzufügen",
     startTimesOverlap: (a, b, minutes) =>
       `${a} und ${b} liegen zu nah beieinander (ein Durchlauf dauert aktuell ca. ${minutes} min) - sie würden sich überschneiden. Nicht gespeichert.`,
     winterMode: "Wintermodus",
     rainPause: "Regen-Pause",
     rainPauseClear: (until) => `bis ${until} · aufheben`,
+    rainPauseOff: "Aus",
     days: "Tage",
     day: "Tag",
     weatherAdjustment: "Wetterbasierte Dauer",
@@ -665,7 +681,7 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
             <div class="tile-row-icon"><ha-icon icon="mdi:timer-sand"></ha-icon></div>
             <div class="tile-row-label">${t.pauseBetweenZones}</div>
             <div class="tile-row-control">
-              <input type="range" min="0" max="900" step="10" value="${attrs.pause_between_zones_seconds}" id="pause-range" />
+              <input type="range" min="0" max="900" step="60" value="${attrs.pause_between_zones_seconds}" id="pause-range" />
               <span class="tile-row-value">${formatSeconds(attrs.pause_between_zones_seconds)}</span>
             </div>
           </div>
@@ -691,8 +707,8 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
             <div class="tile-row-label">${t.rainPause}</div>
             <div class="tile-row-control" style="flex-direction: column; align-items: stretch; gap: 8px;">
               <div style="display:flex; align-items:center; gap:8px;">
-                <input type="range" min="1" max="14" step="1" id="rain-pause-days" value="${this._rainPauseDefaultDays(attrs)}" />
-                <span class="tile-row-value" id="rain-pause-days-value">${this._rainPauseDefaultDays(attrs)} ${this._rainPauseDefaultDays(attrs) > 1 ? t.days : t.day}</span>
+                <input type="range" min="0" max="24" step="1" id="rain-pause-days" value="${this._rainPauseDefaultDays(attrs)}" />
+                <span class="tile-row-value" id="rain-pause-days-value">${this._formatRainPauseDays(this._rainPauseDefaultDays(attrs), t)}</span>
               </div>
               ${
                 attrs.rain_pause_until
@@ -716,7 +732,7 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
         <div class="drag-handle" draggable="true" title="${t.dragHandle}"><ha-icon icon="mdi:drag-vertical"></ha-icon></div>
         <div class="tile-row-icon"><ha-icon icon="mdi:sprinkler"></ha-icon></div>
         <div class="tile-row-control" style="flex-direction: column; align-items: stretch; gap: 6px;">
-          <input type="text" class="zone-name" data-entity="${zone.entity_id}" placeholder="${t.zoneNamePlaceholder}" value="${zone.name || ""}" />
+          <input type="text" class="zone-name" data-entity="${zone.entity_id}" placeholder="${t.zoneNamePlaceholder}" value="${zoneDisplayName(this._hass, zone)}" />
           <div style="display:flex; align-items:center; gap:8px;">
             <input type="range" min="1" max="30" value="${zone.duration_minutes}" class="zone-duration" data-entity="${zone.entity_id}" />
             <span class="tile-row-value">${zone.duration_minutes} min</span>
@@ -726,16 +742,25 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
     `;
   }
 
-  /** Slider default: days remaining on an active rain pause, otherwise a
-   * reasonable starting point. Always clamped to the 1-14 range. */
+  /** Slider value: days remaining on an active rain pause (clamped to the
+   * 1-24 range), or 0 when there's no active pause - 0 is the slider's own
+   * "off" position, so this always reflects the real current state instead
+   * of a suggested starting point. */
   _rainPauseDefaultDays(attrs) {
     if (attrs.rain_pause_until) {
       const remaining = Math.ceil(
         (new Date(attrs.rain_pause_until) - new Date()) / 86400000
       );
-      return Math.min(14, Math.max(1, remaining));
+      return Math.min(24, Math.max(1, remaining));
     }
-    return 3;
+    return 0;
+  }
+
+  /** Renders the rain-pause slider's day count, with 0 shown as "off"
+   * instead of "0 days". */
+  _formatRainPauseDays(days, t) {
+    if (days <= 0) return t.rainPauseOff;
+    return `${days} ${days > 1 ? t.days : t.day}`;
   }
 
   /** 1-3 daily start times, each a pair of plain hour/minute number inputs
@@ -915,11 +940,16 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
     const rainPauseDays = root.getElementById("rain-pause-days");
     rainPauseDays?.addEventListener("input", (e) => {
       const days = parseInt(e.target.value, 10);
-      root.getElementById("rain-pause-days-value").textContent = `${days} ${days > 1 ? t.days : t.day}`;
+      root.getElementById("rain-pause-days-value").textContent = this._formatRainPauseDays(days, t);
     });
     rainPauseDays?.addEventListener("change", (e) => {
       this._releaseRenderSuppression();
-      this._callService("set_rain_pause", { days: parseInt(e.target.value, 10) });
+      const days = parseInt(e.target.value, 10);
+      if (days <= 0) {
+        this._callService("clear_rain_pause", {});
+      } else {
+        this._callService("set_rain_pause", { days });
+      }
     });
     root.getElementById("clear-rain")?.addEventListener("click", () => {
       this._releaseRenderSuppression();

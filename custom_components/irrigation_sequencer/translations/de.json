@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Irrigation Sequencer einrichten",
+        "title": "Bewässerungssequenzer einrichten",
         "description": "Wähle 1 bis 10 Ventile oder Steckdosen aus, die als Bewässerungszonen gesteuert werden sollen.",
         "data": {
           "name": "Name",
@@ -86,7 +86,7 @@
     },
     "set_rain_pause": {
       "name": "Regen-Pause setzen",
-      "description": "Setzt die Bewässerung für 1-14 Tage aus (z. B. nach Regen)."
+      "description": "Setzt die Bewässerung für 1-24 Tage aus (z. B. nach Regen)."
     },
     "clear_rain_pause": {
       "name": "Regen-Pause aufheben",

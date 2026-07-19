@@ -41,8 +41,9 @@ im Browser ausprobieren kannst.*
 - **Pause zwischen den Zonen** – konfigurierbare Wartezeit, bevor die nächste Zone startet
 - **1–3 tägliche Startzeiten** – z. B. ein früher und ein später Lauf am Tag, jede startet unabhängig eine vollständige Sequenz. Zeiten, die sich überschneiden würden (näher beieinander als ein Durchlauf dauert), werden mit klarer Meldung abgelehnt – sowohl in der Card als auch bei Nutzung des Service.
 - **Wintermodus** – ein Schalter, der die gesamte Bewässerung komplett deaktiviert
-- **Regen-Pause** – die Sequenz für 1 bis 14 Tage manuell aussetzen (z. B. nach Regen),
-  danach läuft der normale Zeitplan automatisch wieder
+- **Regen-Pause** – die Sequenz für 1 bis 24 Tage manuell aussetzen (z. B. nach
+  Regen) über einen einzigen Schieberegler, der sie auch wieder ausschaltet
+  (auf 0 ziehen); danach läuft der normale Zeitplan automatisch wieder
 - **Wetterbasierte Dauer-Anpassung** – optional die Dauer jeder Zone mit einem
   Faktor multiplizieren, der aus der aktuellen Außentemperatur berechnet wird,
   linear interpoliert zwischen zwei Referenzpunkten. Beispiel mit den
@@ -81,8 +82,20 @@ Hauptanwendungsfall ist.
 2. Datei `irrigation-sequencer-card/irrigation-sequencer-card.js` nach
    `config/www/` kopieren
 3. Unter **Einstellungen → Dashboards → Ressourcen** die Datei
-   `/local/irrigation-sequencer-card.js` als JavaScript-Modul hinzufügen
+   `/local/irrigation-sequencer-card.js?v=0.9.0` als JavaScript-Modul
+   hinzufügen (der `?v=...`-Teil ist wichtig - siehe Hinweis unten)
 4. Home Assistant neu starten und die Integration wie oben beschrieben einrichten
+
+> **Manuelle Installation aktualisieren**: Browser (vor allem am Handy)
+> können die einfache `.js`-Datei unbegrenzt zwischenspeichern und liefern
+> nach dem Kopieren eines Updates stillschweigend weiter die alte Version
+> aus - ohne erkennbaren Hinweis, dass etwas veraltet ist. Ändere bei jedem
+> manuellen Update den `?v=...`-Teil der Ressourcen-URL (Einstellungen →
+> Dashboards → Ressourcen → bearbeiten) auf die neue Version, damit der
+> Browser gezwungen wird, die Datei neu zu laden. Zur Kontrolle, welche
+> Version tatsächlich geladen wurde, öffne die Browser-Konsole (F12) - die
+> Card loggt ihre Version beim Laden. Bei Installation über HACS passiert
+> das automatisch, dieser Schritt entfällt dann.
 
 ## Cards einrichten
 
@@ -142,7 +155,7 @@ eigene Automationen:
 | `irrigation_sequencer.set_zone_duration` | Bewässerungsdauer einer Zone setzen |
 | `irrigation_sequencer.set_pause_between_zones` | Pause zwischen Zonen setzen |
 | `irrigation_sequencer.set_start_times` | Tägliche Startzeiten setzen (1–3) |
-| `irrigation_sequencer.set_rain_pause` | Regen-Pause für 1–14 Tage setzen |
+| `irrigation_sequencer.set_rain_pause` | Regen-Pause für 1–24 Tage setzen |
 | `irrigation_sequencer.clear_rain_pause` | Regen-Pause sofort aufheben |
 | `irrigation_sequencer.set_winter_mode` | Wintermodus aktivieren/deaktivieren |
 | `irrigation_sequencer.set_weather_adjustment` | Temperaturabhängige Dauer-Anpassung konfigurieren |
