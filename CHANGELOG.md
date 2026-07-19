@@ -5,6 +5,17 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.9.5] - 2026-07-20
+
+- Fixed the forecast stat tile still overflowing the card width on narrow
+  phone screens even after 0.9.2's word-wrap fix - `.stat-row` forced all 3
+  tiles onto a single line regardless of available width. Now wraps onto a
+  second row when they don't fit. Fixes [#26](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/26).
+- Fixed the pause-between-zones value being able to display/land off the
+  whole-minute grid (e.g. "0:50 min") when the stored value predates 0.9.0's
+  switch to 60s steps. Rendered value is now always rounded to the nearest
+  step. Fixes [#27](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/27).
+
 ## [0.9.4] - 2026-07-19
 
 - **Fixed**: values (zone duration, pause between zones, rain pause, start
