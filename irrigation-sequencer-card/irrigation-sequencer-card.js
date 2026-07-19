@@ -249,15 +249,6 @@ class IrrigationSequencerBaseCard extends HTMLElement {
     this._hass.callService(DOMAIN, service, { entry_id: entryId, ...extra });
   }
 
-  _switchEntityId(entryId, translationKey) {
-    return Object.keys(this._hass.states).find(
-      (id) =>
-        id.startsWith("switch.") &&
-        this._hass.states[id].attributes?.entry_id === entryId &&
-        id.includes(translationKey)
-    );
-  }
-
   /** Proportional zone/pause timeline. Segments are colored done/active/upcoming
    * based on last_zone_index (persists through the pause after a zone) and
    * current_zone_index (set only while a zone is actively running). */
@@ -748,10 +739,7 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
 
     root.getElementById("winter-toggle")?.addEventListener("change", (e) => {
       this._releaseRenderSuppression();
-      const entryId = this._entityState().attributes.entry_id;
-      this._hass.callService("switch", e.target.checked ? "turn_on" : "turn_off", {
-        entity_id: this._switchEntityId(entryId, "winter_mode"),
-      });
+      this._callService("set_winter_mode", { enabled: e.target.checked });
     });
 
     const hourInput = root.getElementById("start-time-hour");

@@ -5,6 +5,18 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.5.0] - 2026-07-19
+
+- Fixed the winter mode toggle failing with "must contain at least one of
+  entity_id..." on non-English instances. The card guessed the winter-mode
+  switch's `entity_id` by checking whether it contained the literal string
+  "winter_mode" - but entity IDs are generated from the (translated) entity
+  name, so on a German instance the switch is `..._wintermodus`, and the
+  guess silently returned nothing. Added a proper
+  `irrigation_sequencer.set_winter_mode` service and switched the card to
+  use it, the same way `set_weather_adjustment` already worked - no more
+  entity_id guessing.
+
 ## [0.4.2] - 2026-07-19
 
 - Fixed sliders/fields visually snapping back to their old value right after
