@@ -17,7 +17,7 @@ const DOMAIN = "irrigation_sequencer";
 // browser console, whether an update actually took effect versus just
 // looking "the same" as before. Keep this in step with manifest.json's
 // "version" on every release.
-const CARD_VERSION = "0.9.0";
+const CARD_VERSION = "0.9.1";
 // eslint-disable-next-line no-console
 console.info(
   `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
@@ -218,12 +218,22 @@ class IrrigationSequencerBaseCard extends HTMLElement {
       // opens - long before the user has picked anything - and clearing
       // suppression there would re-open the exact race this guard exists to
       // close.
-      this.shadowRoot.addEventListener("pointerdown", (e) => {
+      const startSuppression = (e) => {
         if (e.target.closest?.("input, select, textarea")) {
           this._suppressRender = true;
           this._scheduleRenderResume(60000);
         }
-      });
+      };
+      // pointerdown covers mouse/touch/pen in any standards-compliant
+      // browser; touchstart is added as a redundant fallback because some
+      // embedded WebViews (e.g. the Home Assistant Companion App on
+      // Android/iOS) have been observed with incomplete or delayed Pointer
+      // Events support, where pointerdown can fail to fire for a tap -
+      // leaving suppression never engaged and a field losing focus/input
+      // the instant an unrelated hass update lands. focusin is a third,
+      // even older/more universally supported layer for the same guard.
+      this.shadowRoot.addEventListener("pointerdown", startSuppression);
+      this.shadowRoot.addEventListener("touchstart", startSuppression, { passive: true });
       this.shadowRoot.addEventListener("focusin", (e) => {
         if (e.target.matches?.("input, select, textarea")) {
           this._suppressRender = true;

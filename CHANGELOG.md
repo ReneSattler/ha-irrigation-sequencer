@@ -5,6 +5,17 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.9.1] - 2026-07-19
+
+- Reopened and hardened [#14](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/14): zone name field losing focus immediately on tap, confirmed
+  real and current on the Home Assistant Companion App (v0.9.0 already
+  active, so not the stale-cache issue this session's other reports turned
+  out to be). Added a `touchstart` listener alongside `pointerdown` as a
+  redundant trigger for the render-suppression guard - some embedded
+  WebViews (including the Companion App's) have incomplete or delayed
+  Pointer Events support, where `pointerdown` can fail to fire for a tap,
+  leaving the guard never engaged.
+
 ## [0.9.0] - 2026-07-19
 
 - Renamed "Night start" / "Nachtstart" to "Automatic start" / "Automatischer
