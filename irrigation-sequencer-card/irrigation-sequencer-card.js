@@ -162,10 +162,13 @@ function linearFactor(temp, referenceTemp, hotTemp, hotFactor) {
   return Math.max(MIN_WEATHER_FACTOR, Math.min(MAX_WEATHER_FACTOR, factor));
 }
 
-/** Best-effort forecast high for today, from the weather entity's legacy
- * `forecast` attribute (still exposed by many weather integrations). Returns
- * null if unavailable - the caller should simply omit the forecast row. */
-function todaysForecastHigh(hass, weatherEntityId) {
+const FORECAST_CACHE_TTL_MS = 10 * 60 * 1000;
+
+/** Forecast high for today, from the weather entity's legacy `forecast`
+ * state attribute. Modern weather integrations (e.g. Met.no, DWD) dropped
+ * this attribute in favor of the `weather.get_forecasts` action, so this is
+ * only a fast synchronous path for integrations that still expose it. */
+function legacyForecastHigh(hass, weatherEntityId) {
   const state = weatherEntityId ? hass.states[weatherEntityId] : null;
   const forecast = state?.attributes?.forecast;
   if (!Array.isArray(forecast) || !forecast.length) return null;
@@ -272,6 +275,53 @@ class IrrigationSequencerBaseCard extends HTMLElement {
     this._hass.callService(DOMAIN, service, { entry_id: entryId, ...extra });
   }
 
+  /** Today's forecast high for a weather entity, preferring the legacy
+   * synchronous `forecast` attribute and otherwise fetching it via the
+   * `weather.get_forecasts` action. That action is async, so this returns
+   * whatever's currently cached (or null on the first call for an entity)
+   * and kicks off a fetch in the background, cached per entity for
+   * FORECAST_CACHE_TTL_MS and triggering one re-render once it resolves. */
+  _forecastHighFor(weatherEntityId) {
+    const legacy = legacyForecastHigh(this._hass, weatherEntityId);
+    if (legacy != null) return legacy;
+
+    const cache = this._forecastCache;
+    if (cache && cache.entityId === weatherEntityId) {
+      if (Date.now() - cache.fetchedAt < FORECAST_CACHE_TTL_MS) return cache.high;
+    }
+
+    if (this._forecastFetchEntityId !== weatherEntityId) {
+      this._forecastFetchEntityId = weatherEntityId;
+      Promise.resolve(
+        this._hass.callService(
+          "weather",
+          "get_forecasts",
+          { type: "daily" },
+          { entity_id: weatherEntityId },
+          true,
+          true
+        )
+      )
+        .then((result) => {
+          const forecast = result?.response?.[weatherEntityId]?.forecast;
+          const temp = Array.isArray(forecast) && forecast.length ? forecast[0]?.temperature : null;
+          this._forecastCache = {
+            entityId: weatherEntityId,
+            high: typeof temp === "number" ? temp : null,
+            fetchedAt: Date.now(),
+          };
+        })
+        .catch(() => {
+          this._forecastCache = { entityId: weatherEntityId, high: null, fetchedAt: Date.now() };
+        })
+        .finally(() => {
+          this._forecastFetchEntityId = null;
+          if (!this._suppressRender && !this._isEditingField()) this._render();
+        });
+    }
+    return cache && cache.entityId === weatherEntityId ? cache.high : null;
+  }
+
   /** Proportional zone/pause timeline. Segments are colored done/active/upcoming
    * based on last_zone_index (persists through the pause after a zone) and
    * current_zone_index (set only while a zone is actively running). */
@@ -326,7 +376,7 @@ class IrrigationSequencerBaseCard extends HTMLElement {
 
   _renderForecastStat(attrs, t) {
     if (!attrs.weather_adjustment_enabled || !attrs.weather_entity) return "";
-    const high = todaysForecastHigh(this._hass, attrs.weather_entity);
+    const high = this._forecastHighFor(attrs.weather_entity);
     if (high == null) return "";
     const factor = linearFactor(
       high,
