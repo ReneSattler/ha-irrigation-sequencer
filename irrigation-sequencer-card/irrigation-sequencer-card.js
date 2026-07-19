@@ -17,7 +17,7 @@ const DOMAIN = "irrigation_sequencer";
 // browser console, whether an update actually took effect versus just
 // looking "the same" as before. Keep this in step with manifest.json's
 // "version" on every release.
-const CARD_VERSION = "0.9.6";
+const CARD_VERSION = "0.9.7";
 // eslint-disable-next-line no-console
 console.info(
   `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
@@ -302,6 +302,28 @@ class IrrigationSequencerBaseCard extends HTMLElement {
       () => this._scheduleRenderResume(400),
       () => this._scheduleRenderResume(400)
     );
+  }
+
+  /** Commits a range input's value via onCommit(value), triggered by
+   * "change" AND pointerup/touchend redundantly (deduped so a value is
+   * only ever committed once per distinct drag). Some Android WebViews
+   * have been reported to not reliably fire "change" for a touch-dragged
+   * <input type="range"> - if that's the case here, relying on "change"
+   * alone means the new value is silently never persisted at all, and the
+   * next re-render (e.g. once the 60s safety-net suppression timer
+   * expires) then shows the old, still-unpersisted value, which looks
+   * exactly like the drag "snapping back". pointerup/touchend are a more
+   * primitively-supported pair of events to fall back on. */
+  _attachRangeCommit(input, onCommit) {
+    let lastCommitted = input.value;
+    const commit = () => {
+      if (input.value === lastCommitted) return;
+      lastCommitted = input.value;
+      this._releaseRenderSuppression(onCommit(input.value));
+    };
+    input.addEventListener("change", commit);
+    input.addEventListener("pointerup", commit);
+    input.addEventListener("touchend", commit);
   }
 
   /** True while an input/select/textarea inside this card's shadow root has
@@ -970,23 +992,23 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
     pauseRange?.addEventListener("input", (e) => {
       pauseRange.nextElementSibling.textContent = formatSeconds(e.target.value);
     });
-    pauseRange?.addEventListener("change", (e) => {
-      this._releaseRenderSuppression(
-        this._callService("set_pause_between_zones", { seconds: parseInt(e.target.value, 10) })
+    if (pauseRange) {
+      this._attachRangeCommit(pauseRange, (value) =>
+        this._callService("set_pause_between_zones", { seconds: parseInt(value, 10) })
       );
-    });
+    }
 
     const rainPauseDays = root.getElementById("rain-pause-days");
     rainPauseDays?.addEventListener("input", (e) => {
       const days = parseInt(e.target.value, 10);
       root.getElementById("rain-pause-days-value").textContent = this._formatRainPauseDays(days, t);
     });
-    rainPauseDays?.addEventListener("change", (e) => {
-      const days = parseInt(e.target.value, 10);
-      this._releaseRenderSuppression(
-        days <= 0 ? this._callService("clear_rain_pause", {}) : this._callService("set_rain_pause", { days })
-      );
-    });
+    if (rainPauseDays) {
+      this._attachRangeCommit(rainPauseDays, (value) => {
+        const days = parseInt(value, 10);
+        return days <= 0 ? this._callService("clear_rain_pause", {}) : this._callService("set_rain_pause", { days });
+      });
+    }
     root.getElementById("clear-rain")?.addEventListener("click", () => {
       this._releaseRenderSuppression(this._callService("clear_rain_pause", {}));
     });
@@ -1006,14 +1028,12 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
       input.addEventListener("input", (e) => {
         e.target.nextElementSibling.textContent = `${e.target.value} min`;
       });
-      input.addEventListener("change", (e) => {
-        this._releaseRenderSuppression(
-          this._callService("set_zone_duration", {
-            entity_id: e.target.dataset.entity,
-            minutes: parseInt(e.target.value, 10),
-          })
-        );
-      });
+      this._attachRangeCommit(input, (value) =>
+        this._callService("set_zone_duration", {
+          entity_id: input.dataset.entity,
+          minutes: parseInt(value, 10),
+        })
+      );
     });
 
     this._attachWeatherListeners(root);

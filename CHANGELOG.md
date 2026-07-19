@@ -5,6 +5,20 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.9.7] - 2026-07-20
+
+- User reported the zone-duration slider still snaps back after v0.9.6's
+  `touch-action: none` attempt. New hypothesis: some Android WebViews may
+  not reliably fire the "change" event for a touch-dragged
+  `<input type="range">` at all - if so, the new value was never actually
+  persisted (no service call ever made), and the *next* re-render (e.g.
+  once the 60s safety-net suppression timer expires) shows the old,
+  still-unpersisted value, which looks identical to "snapping back".
+  Range-input commits (zone duration, pause between zones, rain pause) now
+  also fire on `pointerup`/`touchend` as a redundant fallback to "change",
+  deduped so a value is never committed twice for the same drag. Still
+  unverified on a real device - see [#25](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/25).
+
 ## [0.9.6] - 2026-07-20
 
 - Attempted fix for the zone-duration slider still losing focus and
