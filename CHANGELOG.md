@@ -5,6 +5,23 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.9.4] - 2026-07-19
+
+- **Fixed**: values (zone duration, pause between zones, rain pause, start
+  times, winter mode, weather settings) could snap back to their old
+  number right after being changed, on a real Home Assistant instance over
+  a real network. Root cause: rendering was suppressed for a blind fixed
+  ~1000ms buffer after a change, assuming the service call would have
+  round-tripped by then - true for `screenshots/demo.html`'s effectively
+  instant mock, not guaranteed on a real (especially mobile) network. If an
+  unrelated hass update lifted suppression before our own change had
+  actually landed, the card re-rendered from stale attrs. `_callService()`
+  now returns its service-call promise, and rendering stays suppressed
+  until that promise actually settles (plus a short buffer for the
+  resulting state update to arrive), with an 8s safety-net fallback.
+  Verified live with a simulated genuinely-stale background update landing
+  mid-flight. Fixes [#24](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/24).
+
 ## [0.9.3] - 2026-07-19
 
 - Fixed the new test suite's CI run (introduced in 0.9.2): `pytest tests/`
