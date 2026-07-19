@@ -5,6 +5,16 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.3.3] - 2026-07-19
+
+- Fixed the 0.3.2 fix: it relied on `focusout` to re-enable rendering, which
+  doesn't work for Android's native time picker - that's a real OS dialog,
+  so the underlying `<input>` loses DOM focus the instant it opens, long
+  before the user has picked anything. Rendering is now only re-enabled once
+  the field's own "change" event fires (value actually committed), with a
+  60s safety timeout as a fallback. Applied to both cards and the visual
+  card editor (e.g. the title field).
+
 ## [0.3.2] - 2026-07-19
 
 - Fixed: any input in either card (night start time, weather entity, zone
