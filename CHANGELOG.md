@@ -5,6 +5,15 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.9.3] - 2026-07-19
+
+- Fixed the new test suite's CI run (introduced in 0.9.2): `pytest tests/`
+  failed with `ModuleNotFoundError: No module named 'custom_components'`
+  since pytest's default import mode doesn't add the repo root to
+  `sys.path`. Added `pytest.ini` (`pythonpath = .`, `asyncio_mode = auto`).
+  Verified green on GitHub Actions (Linux) - no runtime code changed, test
+  infrastructure only.
+
 ## [0.9.2] - 2026-07-19
 
 - Fixed the forecast stat's label overflowing its tile on narrow mobile
