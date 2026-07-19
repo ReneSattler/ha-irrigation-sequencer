@@ -575,8 +575,8 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
           <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4)">
             <div class="tile-row-icon"><ha-icon icon="mdi:weather-night"></ha-icon></div>
             <div class="tile-row-label">${t.nightStart}</div>
-            <div class="tile-row-control">
-              <input type="time" id="start-time" value="${(attrs.start_time || "05:00:00").slice(0, 5)}" step="60" />
+            <div class="tile-row-control" style="gap: 6px; flex: 0 0 auto;">
+              ${this._renderTimeInputs(attrs.start_time)}
             </div>
           </div>
           <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4)">
@@ -629,6 +629,20 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
           </div>
         </div>
       </div>
+    `;
+  }
+
+  /** Two plain number inputs (hour/minute) instead of <input type="time">.
+   * Avoids the platform-specific native time-picker widget entirely (no
+   * modal to fight for focus with) - just the regular numeric keyboard. */
+  _renderTimeInputs(startTime) {
+    const [hh, mm] = (startTime || "05:00:00").split(":");
+    return `
+      <input type="number" id="start-time-hour" min="0" max="23" value="${parseInt(hh, 10)}"
+        style="width: 52px; text-align: center;" inputmode="numeric" />
+      <span>:</span>
+      <input type="number" id="start-time-minute" min="0" max="59" value="${parseInt(mm, 10)}"
+        style="width: 52px; text-align: center;" inputmode="numeric" />
     `;
   }
 
@@ -707,10 +721,20 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
       });
     });
 
-    root.getElementById("start-time")?.addEventListener("change", (e) => {
+    const hourInput = root.getElementById("start-time-hour");
+    const minuteInput = root.getElementById("start-time-minute");
+    const submitStartTime = () => {
       this._releaseRenderSuppression();
-      this._callService("set_start_time", { start_time: `${e.target.value}:00` });
-    });
+      const hour = Math.min(23, Math.max(0, parseInt(hourInput.value, 10) || 0));
+      const minute = Math.min(59, Math.max(0, parseInt(minuteInput.value, 10) || 0));
+      hourInput.value = hour;
+      minuteInput.value = minute;
+      this._callService("set_start_time", {
+        start_time: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`,
+      });
+    };
+    hourInput?.addEventListener("change", submitStartTime);
+    minuteInput?.addEventListener("change", submitStartTime);
 
     const pauseRange = root.getElementById("pause-range");
     pauseRange?.addEventListener("input", (e) => {
