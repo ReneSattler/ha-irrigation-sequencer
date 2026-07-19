@@ -17,7 +17,7 @@ const DOMAIN = "irrigation_sequencer";
 // browser console, whether an update actually took effect versus just
 // looking "the same" as before. Keep this in step with manifest.json's
 // "version" on every release.
-const CARD_VERSION = "0.9.3";
+const CARD_VERSION = "0.9.4";
 // eslint-disable-next-line no-console
 console.info(
   `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
@@ -266,12 +266,29 @@ class IrrigationSequencerBaseCard extends HTMLElement {
     }, delayMs);
   }
 
-  /** Call at the top of a field's "change" handler once its value has been
-   * committed. Leaves rendering suppressed for a short buffer (see
-   * _scheduleRenderResume) rather than lifting it immediately, so the
-   * pending service call has time to round-trip before the DOM rebuilds. */
-  _releaseRenderSuppression() {
-    this._scheduleRenderResume(1000);
+  /** Call once a field's value has been committed and its service call
+   * kicked off (pass the promise _callService returns as pendingCall).
+   * Leaves rendering suppressed until that call actually settles - plus a
+   * short extra buffer, since the call resolving doesn't guarantee our own
+   * entity's updated state has propagated back to us yet - rather than a
+   * blind fixed delay. A blind ~1s delay worked against the demo mock's
+   * effectively instant round trip, but real service calls over a real
+   * (especially mobile) network can take longer, and rendering from attrs
+   * that haven't caught up yet is exactly what makes a value visually snap
+   * back to its old number right after being changed. Falls back to the
+   * old fixed-delay behavior if no promise is given, and always keeps an
+   * 8s safety net in case the call never settles for some reason. */
+  _releaseRenderSuppression(pendingCall) {
+    clearTimeout(this._suppressRenderTimeout);
+    if (!pendingCall || typeof pendingCall.then !== "function") {
+      this._scheduleRenderResume(1000);
+      return;
+    }
+    this._suppressRenderTimeout = setTimeout(() => this._scheduleRenderResume(0), 8000);
+    pendingCall.then(
+      () => this._scheduleRenderResume(400),
+      () => this._scheduleRenderResume(400)
+    );
   }
 
   /** True while an input/select/textarea inside this card's shadow root has
@@ -296,9 +313,9 @@ class IrrigationSequencerBaseCard extends HTMLElement {
 
   _callService(service, extra) {
     const stateObj = this._entityState();
-    if (!stateObj) return;
+    if (!stateObj) return undefined;
     const entryId = stateObj.attributes.entry_id;
-    this._hass.callService(DOMAIN, service, { entry_id: entryId, ...extra });
+    return this._hass.callService(DOMAIN, service, { entry_id: entryId, ...extra });
   }
 
   /** Today's forecast high for a weather entity, preferring the legacy
@@ -895,8 +912,7 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
     const root = this.shadowRoot;
 
     root.getElementById("winter-toggle")?.addEventListener("change", (e) => {
-      this._releaseRenderSuppression();
-      this._callService("set_winter_mode", { enabled: e.target.checked });
+      this._releaseRenderSuppression(this._callService("set_winter_mode", { enabled: e.target.checked }));
     });
 
     const submitStartTimes = (times) => {
@@ -909,8 +925,7 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
         return;
       }
       warningEl.style.display = "none";
-      this._releaseRenderSuppression();
-      this._callService("set_start_times", { start_times: times });
+      this._releaseRenderSuppression(this._callService("set_start_times", { start_times: times }));
     };
     const readRowTimes = () => {
       const hours = Array.from(root.querySelectorAll(".start-time-hour"));
@@ -943,8 +958,9 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
       pauseRange.nextElementSibling.textContent = formatSeconds(e.target.value);
     });
     pauseRange?.addEventListener("change", (e) => {
-      this._releaseRenderSuppression();
-      this._callService("set_pause_between_zones", { seconds: parseInt(e.target.value, 10) });
+      this._releaseRenderSuppression(
+        this._callService("set_pause_between_zones", { seconds: parseInt(e.target.value, 10) })
+      );
     });
 
     const rainPauseDays = root.getElementById("rain-pause-days");
@@ -953,26 +969,23 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
       root.getElementById("rain-pause-days-value").textContent = this._formatRainPauseDays(days, t);
     });
     rainPauseDays?.addEventListener("change", (e) => {
-      this._releaseRenderSuppression();
       const days = parseInt(e.target.value, 10);
-      if (days <= 0) {
-        this._callService("clear_rain_pause", {});
-      } else {
-        this._callService("set_rain_pause", { days });
-      }
+      this._releaseRenderSuppression(
+        days <= 0 ? this._callService("clear_rain_pause", {}) : this._callService("set_rain_pause", { days })
+      );
     });
     root.getElementById("clear-rain")?.addEventListener("click", () => {
-      this._releaseRenderSuppression();
-      this._callService("clear_rain_pause", {});
+      this._releaseRenderSuppression(this._callService("clear_rain_pause", {}));
     });
 
     root.querySelectorAll(".zone-name").forEach((input) => {
       input.addEventListener("change", (e) => {
-        this._releaseRenderSuppression();
-        this._callService("set_zone_name", {
-          entity_id: e.target.dataset.entity,
-          name: e.target.value,
-        });
+        this._releaseRenderSuppression(
+          this._callService("set_zone_name", {
+            entity_id: e.target.dataset.entity,
+            name: e.target.value,
+          })
+        );
       });
     });
 
@@ -981,11 +994,12 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
         e.target.nextElementSibling.textContent = `${e.target.value} min`;
       });
       input.addEventListener("change", (e) => {
-        this._releaseRenderSuppression();
-        this._callService("set_zone_duration", {
-          entity_id: e.target.dataset.entity,
-          minutes: parseInt(e.target.value, 10),
-        });
+        this._releaseRenderSuppression(
+          this._callService("set_zone_duration", {
+            entity_id: e.target.dataset.entity,
+            minutes: parseInt(e.target.value, 10),
+          })
+        );
       });
     });
 
@@ -1008,35 +1022,34 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
     });
 
     root.getElementById("weather-toggle")?.addEventListener("change", (e) => {
-      this._releaseRenderSuppression();
-      this._callService("set_weather_adjustment", readWeatherForm({ enabled: e.target.checked }));
+      this._releaseRenderSuppression(
+        this._callService("set_weather_adjustment", readWeatherForm({ enabled: e.target.checked }))
+      );
     });
     root.getElementById("weather-entity")?.addEventListener("change", (e) => {
-      this._releaseRenderSuppression();
-      this._callService(
-        "set_weather_adjustment",
-        readWeatherForm({ weather_entity: e.target.value })
+      this._releaseRenderSuppression(
+        this._callService("set_weather_adjustment", readWeatherForm({ weather_entity: e.target.value }))
       );
     });
     root.getElementById("weather-reference-temp")?.addEventListener("change", (e) => {
-      this._releaseRenderSuppression();
-      this._callService(
-        "set_weather_adjustment",
-        readWeatherForm({ reference_temp: parseFloat(e.target.value) })
+      this._releaseRenderSuppression(
+        this._callService(
+          "set_weather_adjustment",
+          readWeatherForm({ reference_temp: parseFloat(e.target.value) })
+        )
       );
     });
     root.getElementById("weather-hot-temp")?.addEventListener("change", (e) => {
-      this._releaseRenderSuppression();
-      this._callService(
-        "set_weather_adjustment",
-        readWeatherForm({ hot_temp: parseFloat(e.target.value) })
+      this._releaseRenderSuppression(
+        this._callService("set_weather_adjustment", readWeatherForm({ hot_temp: parseFloat(e.target.value) }))
       );
     });
     root.getElementById("weather-hot-factor")?.addEventListener("change", (e) => {
-      this._releaseRenderSuppression();
-      this._callService(
-        "set_weather_adjustment",
-        readWeatherForm({ hot_factor: parseFloat(e.target.value) })
+      this._releaseRenderSuppression(
+        this._callService(
+          "set_weather_adjustment",
+          readWeatherForm({ hot_factor: parseFloat(e.target.value) })
+        )
       );
     });
   }

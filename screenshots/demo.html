@@ -208,7 +208,7 @@
       settingsCard.hass = nextHass;
     };
     hass.callService = (domain, service, data) => {
-      if (domain !== "irrigation_sequencer") return;
+      if (domain !== "irrigation_sequencer") return Promise.resolve();
       const zone = (id) => statusAttrs.zones.find((z) => z.entity_id === id);
       if (service === "set_start_times") statusAttrs.start_times = data.start_times;
       if (service === "set_zone_duration" && zone(data.entity_id)) {
@@ -239,7 +239,14 @@
       if (service === "set_zone_order") {
         statusAttrs.zones = data.zones.map((id, i) => ({ ...zone(id), position: i }));
       }
-      pushHassUpdate();
+      // Simulate a real service call's network round trip (the demo mock
+      // would otherwise resolve instantly, which never exercises the
+      // pending-promise path in _releaseRenderSuppression the way a real
+      // Home Assistant instance does).
+      return new Promise((resolve) => setTimeout(() => {
+        pushHassUpdate();
+        resolve();
+      }, 400));
     };
 
     const settingsCard = document.getElementById("settings-card");
