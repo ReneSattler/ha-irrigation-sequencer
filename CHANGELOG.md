@@ -5,6 +5,13 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.4.0] - 2026-07-19
+
+- Replaced the night-start `<input type="time">` with two plain number
+  fields (hour/minute). Sidesteps platform-specific native time-picker
+  widgets entirely instead of racing against them - just the regular
+  numeric keyboard, consistent on Android, iOS, and desktop.
+
 ## [0.3.3] - 2026-07-19
 
 - Fixed the 0.3.2 fix: it relied on `focusout` to re-enable rendering, which
