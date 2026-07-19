@@ -5,6 +5,15 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.4.1] - 2026-07-19
+
+- Fixed the card's language detection falling back to English on recent
+  Home Assistant frontends: `hass.language` was the original field the card
+  read, but newer frontends moved language to `hass.locale.language` and may
+  no longer expose the old alias at all. Now checks `hass.locale.language`
+  first, with `hass.language`, `hass.selectedLanguage`, and finally the
+  page's `<html lang="...">` attribute as fallbacks.
+
 ## [0.4.0] - 2026-07-19
 
 - Replaced the night-start `<input type="time">` with two plain number
