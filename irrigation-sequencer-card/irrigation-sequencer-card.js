@@ -17,7 +17,7 @@ const DOMAIN = "irrigation_sequencer";
 // browser console, whether an update actually took effect versus just
 // looking "the same" as before. Keep this in step with manifest.json's
 // "version" on every release.
-const CARD_VERSION = "0.9.1";
+const CARD_VERSION = "0.9.2";
 // eslint-disable-next-line no-console
 console.info(
   `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
@@ -501,8 +501,8 @@ class IrrigationSequencerBaseCard extends HTMLElement {
       .stat { flex: 1; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px;
         background: var(--secondary-background-color, rgba(127,127,127,0.08)); min-width: 0; }
       .stat ha-icon { color: var(--tile-color, var(--primary-color)); flex-shrink: 0; }
-      .stat-value { font-size: 0.92em; font-weight: 600; color: var(--primary-text-color); }
-      .stat-label { font-size: 0.72em; color: var(--secondary-text-color); }
+      .stat-value { font-size: 0.92em; font-weight: 600; color: var(--primary-text-color); overflow-wrap: break-word; word-break: break-word; }
+      .stat-label { font-size: 0.72em; color: var(--secondary-text-color); overflow-wrap: break-word; word-break: break-word; }
 
       /* Layout: horizontal arranges content side-by-side for wide/short cards */
       .layout-horizontal .status-columns { display: flex; gap: 16px; align-items: flex-start; }

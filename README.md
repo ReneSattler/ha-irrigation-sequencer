@@ -76,7 +76,7 @@ for experimenting even though it isn't the primary use case.
 2. Copy `irrigation-sequencer-card/irrigation-sequencer-card.js` into
    `config/www/`
 3. Under **Settings → Dashboards → Resources**, add
-   `/local/irrigation-sequencer-card.js?v=0.9.1` as a JavaScript module (the
+   `/local/irrigation-sequencer-card.js?v=0.9.2` as a JavaScript module (the
    `?v=...` part matters - see note below)
 4. Restart Home Assistant and set up the integration as described above
 
@@ -154,6 +154,30 @@ automations:
 
 You can find the `entry_id` as an attribute on the integration's status
 sensor.
+
+## Development
+
+Backend logic (`custom_components/irrigation_sequencer/manager.py`) has a
+pytest test suite using
+[pytest-homeassistant-custom-component](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component):
+
+```bash
+pip install -r requirements-test.txt
+pytest tests/ -v
+```
+
+Runs automatically on every push/PR via GitHub Actions
+(`.github/workflows/tests.yml`).
+
+> **Windows note**: `pytest-homeassistant-custom-component` can fail locally
+> on Windows with a `pytest_socket.SocketBlockedError` during test setup -
+> asyncio's default `ProactorEventLoop` needs a real OS socket for its
+> internal self-pipe, which the test suite's socket-blocking safety net
+> rejects. CI (Linux) isn't affected. If you need to run tests locally on
+> Windows, use WSL, or try forcing the selector event loop policy
+> (`asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())`)
+> before pytest starts - this repo's `tests/conftest.py` already does this,
+> though it hasn't fully resolved it in every environment tested so far.
 
 ## License
 

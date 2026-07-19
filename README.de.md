@@ -82,7 +82,7 @@ Hauptanwendungsfall ist.
 2. Datei `irrigation-sequencer-card/irrigation-sequencer-card.js` nach
    `config/www/` kopieren
 3. Unter **Einstellungen → Dashboards → Ressourcen** die Datei
-   `/local/irrigation-sequencer-card.js?v=0.9.1` als JavaScript-Modul
+   `/local/irrigation-sequencer-card.js?v=0.9.2` als JavaScript-Modul
    hinzufügen (der `?v=...`-Teil ist wichtig - siehe Hinweis unten)
 4. Home Assistant neu starten und die Integration wie oben beschrieben einrichten
 
@@ -161,6 +161,31 @@ eigene Automationen:
 | `irrigation_sequencer.set_weather_adjustment` | Temperaturabhängige Dauer-Anpassung konfigurieren |
 
 Die `entry_id` findest du als Attribut am Status-Sensor der Integration.
+
+## Entwicklung
+
+Für die Backend-Logik (`custom_components/irrigation_sequencer/manager.py`)
+gibt es eine pytest-Testsuite mit
+[pytest-homeassistant-custom-component](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component):
+
+```bash
+pip install -r requirements-test.txt
+pytest tests/ -v
+```
+
+Läuft automatisch bei jedem Push/PR über GitHub Actions
+(`.github/workflows/tests.yml`).
+
+> **Hinweis für Windows**: `pytest-homeassistant-custom-component` kann
+> lokal unter Windows mit einem `pytest_socket.SocketBlockedError` beim
+> Testaufbau fehlschlagen - Pythons `ProactorEventLoop` benötigt für seine
+> interne Selbstverbindung ein echtes OS-Socket, das vom
+> Socket-Sicherheitsnetz der Testsuite blockiert wird. CI (Linux) ist davon
+> nicht betroffen. Für lokale Tests unter Windows entweder WSL nutzen oder
+> die Selector-Event-Loop-Policy erzwingen
+> (`asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())`)
+> - `tests/conftest.py` macht das bereits, hat das Problem bisher aber nicht
+> in jeder getesteten Umgebung vollständig gelöst.
 
 ## Lizenz
 
