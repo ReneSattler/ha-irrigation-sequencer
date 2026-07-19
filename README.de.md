@@ -1,3 +1,5 @@
+<img src="custom_components/irrigation_sequencer/icon.png" width="96" height="96" alt="Irrigation Sequencer Icon">
+
 # Irrigation Sequencer
 
 *[English version](README.md)*
