@@ -37,7 +37,7 @@ Home Assistant instance.*
   can be changed by drag & drop directly in the settings card
 - **Per-zone duration** - every zone has its own irrigation duration (minutes)
 - **Pause between zones** - configurable wait time before the next zone starts
-- **Night start** - daily automatic start time (e.g. 05:00)
+- **1-3 daily start times** - e.g. an early-morning and a late-evening run, each independently triggering a full sequence
 - **Winter mode** - a single switch that fully disables irrigation
 - **Rain pause** - manually pause the sequence for 1 to 14 days (e.g. after
   rainfall); the normal schedule resumes automatically afterwards
@@ -136,7 +136,7 @@ automations:
 | `irrigation_sequencer.set_zone_name` | Set a custom display name for a zone |
 | `irrigation_sequencer.set_zone_duration` | Set the irrigation duration of a zone |
 | `irrigation_sequencer.set_pause_between_zones` | Set the pause between zones |
-| `irrigation_sequencer.set_start_time` | Set the daily start time |
+| `irrigation_sequencer.set_start_times` | Set the daily start times (1-3) |
 | `irrigation_sequencer.set_rain_pause` | Pause irrigation for 1-14 days |
 | `irrigation_sequencer.clear_rain_pause` | Clear an active rain pause |
 | `irrigation_sequencer.set_winter_mode` | Enable or disable winter mode |

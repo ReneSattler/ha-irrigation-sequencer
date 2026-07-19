@@ -25,6 +25,7 @@ const TRANSLATIONS = {
     zonesLabel: (n) => `${n} zones`,
     pauseBetweenZones: "Pause between zones",
     nightStart: "Night start",
+    addTime: "Add time",
     winterMode: "Winter mode",
     rainPause: "Rain pause",
     rainPauseClear: (until) => `until ${until} · clear`,
@@ -68,6 +69,7 @@ const TRANSLATIONS = {
     zonesLabel: (n) => `${n} Zonen`,
     pauseBetweenZones: "Pause zwischen Zonen",
     nightStart: "Nachtstart",
+    addTime: "Zeit hinzufügen",
     winterMode: "Wintermodus",
     rainPause: "Regen-Pause",
     rainPauseClear: (until) => `bis ${until} · aufheben`,
@@ -142,6 +144,9 @@ function friendlyName(hass, entityId) {
 function zoneDisplayName(hass, zone) {
   return zone.name?.trim() ? zone.name : friendlyName(hass, zone.entity_id);
 }
+
+const MIN_START_TIMES = 1;
+const MAX_START_TIMES = 3;
 
 const MIN_WEATHER_FACTOR = 0.1;
 const MAX_WEATHER_FACTOR = 3.0;
@@ -610,11 +615,11 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
               <span class="tile-row-value">${formatSeconds(attrs.pause_between_zones_seconds)}</span>
             </div>
           </div>
-          <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4)">
+          <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4); align-items: flex-start;">
             <div class="tile-row-icon"><ha-icon icon="mdi:weather-night"></ha-icon></div>
             <div class="tile-row-label">${t.nightStart}</div>
-            <div class="tile-row-control" style="gap: 6px; flex: 0 0 auto;">
-              ${this._renderTimeInputs(attrs.start_time)}
+            <div class="tile-row-control" style="flex-direction: column; align-items: stretch; gap: 8px;">
+              ${this._renderStartTimes(attrs)}
             </div>
           </div>
           <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4)">
@@ -653,13 +658,13 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
 
   _renderZoneRow(zone, index, t) {
     return `
-      <div class="tile-row zone-row" style="--tile-color: var(--success-color, #4caf50);" draggable="true" data-index="${index}" data-entity="${zone.entity_id}">
-        <div class="drag-handle" title="${t.dragHandle}"><ha-icon icon="mdi:drag-vertical"></ha-icon></div>
+      <div class="tile-row zone-row" style="--tile-color: var(--success-color, #4caf50);" data-index="${index}" data-entity="${zone.entity_id}">
+        <div class="drag-handle" draggable="true" title="${t.dragHandle}"><ha-icon icon="mdi:drag-vertical"></ha-icon></div>
         <div class="tile-row-icon"><ha-icon icon="mdi:sprinkler"></ha-icon></div>
         <div class="tile-row-control" style="flex-direction: column; align-items: stretch; gap: 6px;">
           <input type="text" class="zone-name" data-entity="${zone.entity_id}" placeholder="${t.zoneNamePlaceholder}" value="${zone.name || ""}" />
           <div style="display:flex; align-items:center; gap:8px;">
-            <input type="range" min="1" max="60" value="${zone.duration_minutes}" class="zone-duration" data-entity="${zone.entity_id}" />
+            <input type="range" min="1" max="30" value="${zone.duration_minutes}" class="zone-duration" data-entity="${zone.entity_id}" />
             <span class="tile-row-value">${zone.duration_minutes} min</span>
           </div>
         </div>
@@ -679,18 +684,37 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
     return 3;
   }
 
-  /** Two plain number inputs (hour/minute) instead of <input type="time">.
-   * Avoids the platform-specific native time-picker widget entirely (no
-   * modal to fight for focus with) - just the regular numeric keyboard. */
-  _renderTimeInputs(startTime) {
-    const [hh, mm] = (startTime || "05:00:00").split(":");
-    return `
-      <input type="number" id="start-time-hour" min="0" max="23" value="${parseInt(hh, 10)}"
-        style="width: 52px; text-align: center;" inputmode="numeric" />
-      <span>:</span>
-      <input type="number" id="start-time-minute" min="0" max="59" value="${parseInt(mm, 10)}"
-        style="width: 52px; text-align: center;" inputmode="numeric" />
-    `;
+  /** 1-3 daily start times, each a pair of plain hour/minute number inputs
+   * (instead of <input type="time">, sidestepping platform-specific native
+   * picker widgets entirely) plus a remove button, and an "add" button while
+   * under the cap. Every add/remove/edit submits the full list. */
+  _renderStartTimes(attrs) {
+    const t = getTranslations(this._hass);
+    const times = attrs.start_times && attrs.start_times.length ? attrs.start_times : ["05:00:00"];
+    const rows = times
+      .map((time, index) => {
+        const [hh, mm] = time.split(":");
+        return `
+          <div class="start-time-row" data-index="${index}" style="display:flex; align-items:center; gap:6px;">
+            <input type="number" class="start-time-hour" data-index="${index}" min="0" max="23" value="${parseInt(hh, 10)}"
+              style="width: 52px; text-align: center;" inputmode="numeric" />
+            <span>:</span>
+            <input type="number" class="start-time-minute" data-index="${index}" min="0" max="59" value="${parseInt(mm, 10)}"
+              style="width: 52px; text-align: center;" inputmode="numeric" />
+            ${
+              times.length > MIN_START_TIMES
+                ? `<button class="chip chip-clear" data-remove-time="${index}" style="padding: 2px 10px;">✕</button>`
+                : ""
+            }
+          </div>
+        `;
+      })
+      .join("");
+    const addButton =
+      times.length < MAX_START_TIMES
+        ? `<button class="chip" id="add-start-time">+ ${t.addTime}</button>`
+        : "";
+    return rows + addButton;
   }
 
   _renderWeatherSection(attrs, t) {
@@ -765,20 +789,35 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
       this._callService("set_winter_mode", { enabled: e.target.checked });
     });
 
-    const hourInput = root.getElementById("start-time-hour");
-    const minuteInput = root.getElementById("start-time-minute");
-    const submitStartTime = () => {
+    const submitStartTimes = (times) => {
       this._releaseRenderSuppression();
-      const hour = Math.min(23, Math.max(0, parseInt(hourInput.value, 10) || 0));
-      const minute = Math.min(59, Math.max(0, parseInt(minuteInput.value, 10) || 0));
-      hourInput.value = hour;
-      minuteInput.value = minute;
-      this._callService("set_start_time", {
-        start_time: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`,
+      this._callService("set_start_times", { start_times: times });
+    };
+    const readRowTimes = () => {
+      const hours = Array.from(root.querySelectorAll(".start-time-hour"));
+      const minutes = Array.from(root.querySelectorAll(".start-time-minute"));
+      return hours.map((hourEl, i) => {
+        const hour = Math.min(23, Math.max(0, parseInt(hourEl.value, 10) || 0));
+        const minute = Math.min(59, Math.max(0, parseInt(minutes[i].value, 10) || 0));
+        return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
       });
     };
-    hourInput?.addEventListener("change", submitStartTime);
-    minuteInput?.addEventListener("change", submitStartTime);
+
+    root.querySelectorAll(".start-time-hour, .start-time-minute").forEach((input) => {
+      input.addEventListener("change", () => submitStartTimes(readRowTimes()));
+    });
+    root.querySelectorAll("[data-remove-time]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const times = readRowTimes();
+        times.splice(parseInt(btn.dataset.removeTime, 10), 1);
+        submitStartTimes(times);
+      });
+    });
+    root.getElementById("add-start-time")?.addEventListener("click", () => {
+      const times = readRowTimes();
+      times.push("12:00:00");
+      submitStartTimes(times);
+    });
 
     const pauseRange = root.getElementById("pause-range");
     pauseRange?.addEventListener("input", (e) => {
@@ -879,9 +918,16 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
   }
 
   _attachDragAndDrop(root, zones) {
+    // Only the drag-handle icon is draggable="true" (see _renderZoneRow) -
+    // not the whole row. A draggable row would swallow every mousedown
+    // inside it as a potential drag gesture, including the slightest mouse
+    // wobble while clicking into the zone-name text field, which blurred it
+    // instantly and made typing impossible. dragover/drop stay on the row
+    // so you can still drop anywhere over it, just not start the drag from
+    // anywhere in it.
     const zoneEls = Array.from(root.querySelectorAll(".zone-row"));
     zoneEls.forEach((el) => {
-      el.addEventListener("dragstart", (e) => {
+      el.querySelector(".drag-handle")?.addEventListener("dragstart", (e) => {
         this._dragIndex = parseInt(el.dataset.index, 10);
         e.dataTransfer.effectAllowed = "move";
       });
