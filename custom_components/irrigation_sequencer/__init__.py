@@ -20,6 +20,7 @@ from .const import (
     SERVICE_SET_RAIN_PAUSE,
     SERVICE_SET_START_TIME,
     SERVICE_SET_WEATHER_ADJUSTMENT,
+    SERVICE_SET_WINTER_MODE,
     SERVICE_SET_ZONE_DURATION,
     SERVICE_SET_ZONE_NAME,
     SERVICE_SET_ZONE_ORDER,
@@ -76,6 +77,12 @@ SET_WEATHER_ADJUSTMENT_SCHEMA = vol.Schema(
         vol.Required("reference_temp"): vol.Coerce(float),
         vol.Required("hot_temp"): vol.Coerce(float),
         vol.Required("hot_factor"): vol.Coerce(float),
+    }
+)
+SET_WINTER_MODE_SCHEMA = vol.Schema(
+    {
+        vol.Required("entry_id"): cv.string,
+        vol.Required("enabled"): cv.boolean,
     }
 )
 ENTRY_ID_ONLY_SCHEMA = vol.Schema({vol.Required("entry_id"): cv.string})
@@ -163,6 +170,10 @@ def _async_register_services(hass: HomeAssistant) -> None:
             call.data["hot_factor"],
         )
 
+    async def handle_set_winter_mode(call: ServiceCall) -> None:
+        manager = _get_manager(hass, call.data["entry_id"])
+        await manager.async_set_winter_mode(call.data["enabled"])
+
     async def handle_start_now(call: ServiceCall) -> None:
         manager = _get_manager(hass, call.data["entry_id"])
         await manager.async_start_now()
@@ -203,6 +214,9 @@ def _async_register_services(hass: HomeAssistant) -> None:
         SERVICE_SET_WEATHER_ADJUSTMENT,
         handle_set_weather_adjustment,
         schema=SET_WEATHER_ADJUSTMENT_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_SET_WINTER_MODE, handle_set_winter_mode, schema=SET_WINTER_MODE_SCHEMA
     )
     hass.services.async_register(
         DOMAIN, SERVICE_START_NOW, handle_start_now, schema=ENTRY_ID_ONLY_SCHEMA

@@ -50,6 +50,7 @@ SERVICE_SET_START_TIME = "set_start_time"
 SERVICE_SET_RAIN_PAUSE = "set_rain_pause"
 SERVICE_CLEAR_RAIN_PAUSE = "clear_rain_pause"
 SERVICE_SET_WEATHER_ADJUSTMENT = "set_weather_adjustment"
+SERVICE_SET_WINTER_MODE = "set_winter_mode"
 SERVICE_START_NOW = "start_now"
 SERVICE_STOP = "stop"
 

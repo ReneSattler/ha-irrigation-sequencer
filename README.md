@@ -139,6 +139,7 @@ automations:
 | `irrigation_sequencer.set_start_time` | Set the daily start time |
 | `irrigation_sequencer.set_rain_pause` | Pause irrigation for 1-14 days |
 | `irrigation_sequencer.clear_rain_pause` | Clear an active rain pause |
+| `irrigation_sequencer.set_winter_mode` | Enable or disable winter mode |
 | `irrigation_sequencer.set_weather_adjustment` | Configure temperature-based duration adjustment |
 
 You can find the `entry_id` as an attribute on the integration's status

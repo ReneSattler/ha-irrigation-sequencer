@@ -105,6 +105,19 @@ clear_rain_pause:
       selector:
         text:
 
+set_winter_mode:
+  name: Set winter mode
+  description: Enables or disables winter mode, which fully disables irrigation while on.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    enabled:
+      required: true
+      selector:
+        boolean:
+
 set_weather_adjustment:
   name: Set weather adjustment
   description: >-

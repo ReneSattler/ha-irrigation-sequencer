@@ -143,6 +143,7 @@ eigene Automationen:
 | `irrigation_sequencer.set_start_time` | Tägliche Startzeit setzen |
 | `irrigation_sequencer.set_rain_pause` | Regen-Pause für 1–14 Tage setzen |
 | `irrigation_sequencer.clear_rain_pause` | Regen-Pause sofort aufheben |
+| `irrigation_sequencer.set_winter_mode` | Wintermodus aktivieren/deaktivieren |
 | `irrigation_sequencer.set_weather_adjustment` | Temperaturabhängige Dauer-Anpassung konfigurieren |
 
 Die `entry_id` findest du als Attribut am Status-Sensor der Integration.
