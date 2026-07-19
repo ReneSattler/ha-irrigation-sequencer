@@ -166,13 +166,36 @@ class IrrigationSequencerBaseCard extends HTMLElement {
       // unrelated update elsewhere in the house. Listeners live on
       // shadowRoot itself, which innerHTML replacement never touches, so
       // they survive every re-render.
-      this.shadowRoot.addEventListener("focusin", () => {
+      //
+      // Suppression starts as soon as a pointer/keyboard interaction begins
+      // (pointerdown/focusin) and is only lifted once the specific field's
+      // own "change" handler runs (the value was actually committed) or a
+      // safety timeout fires. It is deliberately NOT lifted on blur/focusout:
+      // Android's native time picker is a real OS dialog, so the underlying
+      // <input> loses DOM focus the instant it opens - long before the user
+      // has picked anything - and clearing suppression there would re-open
+      // the exact race this guard exists to close.
+      const suppress = () => {
         this._suppressRender = true;
+        clearTimeout(this._suppressRenderTimeout);
+        this._suppressRenderTimeout = setTimeout(() => {
+          this._suppressRender = false;
+        }, 60000);
+      };
+      this.shadowRoot.addEventListener("pointerdown", (e) => {
+        if (e.target.closest?.("input, select, textarea")) suppress();
       });
-      this.shadowRoot.addEventListener("focusout", () => {
-        this._suppressRender = false;
+      this.shadowRoot.addEventListener("focusin", (e) => {
+        if (e.target.matches?.("input, select, textarea")) suppress();
       });
     }
+  }
+
+  /** Call at the top of a field's "change" handler once its value has been
+   * committed, so the next hass update is allowed to re-render again. */
+  _releaseRenderSuppression() {
+    this._suppressRender = false;
+    clearTimeout(this._suppressRenderTimeout);
   }
 
   set hass(hass) {
@@ -677,6 +700,7 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
     const root = this.shadowRoot;
 
     root.getElementById("winter-toggle")?.addEventListener("change", (e) => {
+      this._releaseRenderSuppression();
       const entryId = this._entityState().attributes.entry_id;
       this._hass.callService("switch", e.target.checked ? "turn_on" : "turn_off", {
         entity_id: this._switchEntityId(entryId, "winter_mode"),
@@ -684,6 +708,7 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
     });
 
     root.getElementById("start-time")?.addEventListener("change", (e) => {
+      this._releaseRenderSuppression();
       this._callService("set_start_time", { start_time: `${e.target.value}:00` });
     });
 
@@ -692,20 +717,24 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
       pauseRange.nextElementSibling.textContent = formatSeconds(e.target.value);
     });
     pauseRange?.addEventListener("change", (e) => {
+      this._releaseRenderSuppression();
       this._callService("set_pause_between_zones", { seconds: parseInt(e.target.value, 10) });
     });
 
     root.querySelectorAll(".chip[data-days]").forEach((btn) => {
       btn.addEventListener("click", () => {
+        this._releaseRenderSuppression();
         this._callService("set_rain_pause", { days: parseInt(btn.dataset.days, 10) });
       });
     });
     root.getElementById("clear-rain")?.addEventListener("click", () => {
+      this._releaseRenderSuppression();
       this._callService("clear_rain_pause", {});
     });
 
     root.querySelectorAll(".zone-name").forEach((input) => {
       input.addEventListener("change", (e) => {
+        this._releaseRenderSuppression();
         this._callService("set_zone_name", {
           entity_id: e.target.dataset.entity,
           name: e.target.value,
@@ -715,11 +744,10 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
 
     root.querySelectorAll(".zone-duration").forEach((input) => {
       input.addEventListener("input", (e) => {
-        this._suppressRender = true;
         e.target.nextElementSibling.textContent = `${e.target.value} min`;
       });
       input.addEventListener("change", (e) => {
-        this._suppressRender = false;
+        this._releaseRenderSuppression();
         this._callService("set_zone_duration", {
           entity_id: e.target.dataset.entity,
           minutes: parseInt(e.target.value, 10),
@@ -746,27 +774,32 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
     });
 
     root.getElementById("weather-toggle")?.addEventListener("change", (e) => {
+      this._releaseRenderSuppression();
       this._callService("set_weather_adjustment", readWeatherForm({ enabled: e.target.checked }));
     });
     root.getElementById("weather-entity")?.addEventListener("change", (e) => {
+      this._releaseRenderSuppression();
       this._callService(
         "set_weather_adjustment",
         readWeatherForm({ weather_entity: e.target.value })
       );
     });
     root.getElementById("weather-reference-temp")?.addEventListener("change", (e) => {
+      this._releaseRenderSuppression();
       this._callService(
         "set_weather_adjustment",
         readWeatherForm({ reference_temp: parseFloat(e.target.value) })
       );
     });
     root.getElementById("weather-hot-temp")?.addEventListener("change", (e) => {
+      this._releaseRenderSuppression();
       this._callService(
         "set_weather_adjustment",
         readWeatherForm({ hot_temp: parseFloat(e.target.value) })
       );
     });
     root.getElementById("weather-hot-factor")?.addEventListener("change", (e) => {
+      this._releaseRenderSuppression();
       this._callService(
         "set_weather_adjustment",
         readWeatherForm({ hot_factor: parseFloat(e.target.value) })
@@ -814,11 +847,33 @@ class IrrigationSequencerCardEditorBase extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    this._render();
+    if (!this._suppressRender) {
+      this._render();
+    }
+  }
+
+  _releaseRenderSuppression() {
+    this._suppressRender = false;
+    clearTimeout(this._suppressRenderTimeout);
   }
 
   _render() {
-    if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+    if (!this.shadowRoot) {
+      this.attachShadow({ mode: "open" });
+      const suppress = () => {
+        this._suppressRender = true;
+        clearTimeout(this._suppressRenderTimeout);
+        this._suppressRenderTimeout = setTimeout(() => {
+          this._suppressRender = false;
+        }, 60000);
+      };
+      this.shadowRoot.addEventListener("pointerdown", (e) => {
+        if (e.target.closest?.("input, select, textarea")) suppress();
+      });
+      this.shadowRoot.addEventListener("focusin", (e) => {
+        if (e.target.matches?.("input, select, textarea")) suppress();
+      });
+    }
     const t = getTranslations(this._hass);
     const candidates = Object.keys(this._hass?.states || {}).filter(
       (id) => id.startsWith("sensor.") && this._hass.states[id].attributes?.zones !== undefined
@@ -856,15 +911,18 @@ class IrrigationSequencerCardEditorBase extends HTMLElement {
         </select>
       </div>
     `;
-    this.shadowRoot.getElementById("entity").addEventListener("change", (e) =>
-      this._updateConfig({ entity: e.target.value })
-    );
-    this.shadowRoot.getElementById("title").addEventListener("change", (e) =>
-      this._updateConfig({ title: e.target.value })
-    );
-    this.shadowRoot.getElementById("layout").addEventListener("change", (e) =>
-      this._updateConfig({ layout: e.target.value })
-    );
+    this.shadowRoot.getElementById("entity").addEventListener("change", (e) => {
+      this._releaseRenderSuppression();
+      this._updateConfig({ entity: e.target.value });
+    });
+    this.shadowRoot.getElementById("title").addEventListener("change", (e) => {
+      this._releaseRenderSuppression();
+      this._updateConfig({ title: e.target.value });
+    });
+    this.shadowRoot.getElementById("layout").addEventListener("change", (e) => {
+      this._releaseRenderSuppression();
+      this._updateConfig({ layout: e.target.value });
+    });
   }
 
   _updateConfig(partial) {
