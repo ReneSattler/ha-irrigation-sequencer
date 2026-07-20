@@ -5,6 +5,21 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.9.8] - 2026-07-20
+
+- Confirmed via the backend that the zone-duration value genuinely never
+  changed across all previous fix attempts (v0.9.1, v0.9.4, v0.9.6, v0.9.7)
+  - ruling out a pure rendering glitch. New root cause theory: some mobile
+  browsers/WebViews don't dispatch pointerdown/touchstart/focusin at all
+  for interactions with native form controls that have their own built-in
+  gesture handling - `<input type="range">`'s thumb-drag is exactly that.
+  If none of those ever fire for such a control on a given platform,
+  render suppression never engages in the first place, regardless of any
+  fix downstream of that point. The render-suppression guard now also
+  engages on the first "input" event, which - unlike pointer/touch/focus
+  events - is already proven to fire during a drag (every live-updating
+  label next to a slider depends on it).
+
 ## [0.9.7] - 2026-07-20
 
 - User reported the zone-duration slider still snaps back after v0.9.6's
