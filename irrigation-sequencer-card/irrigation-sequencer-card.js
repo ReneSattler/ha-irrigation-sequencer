@@ -17,7 +17,7 @@ const DOMAIN = "irrigation_sequencer";
 // browser console, whether an update actually took effect versus just
 // looking "the same" as before. Keep this in step with manifest.json's
 // "version" on every release.
-const CARD_VERSION = "0.9.7";
+const CARD_VERSION = "0.9.8";
 // eslint-disable-next-line no-console
 console.info(
   `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
@@ -253,6 +253,18 @@ class IrrigationSequencerBaseCard extends HTMLElement {
           this._scheduleRenderResume(60000);
         }
       });
+      // Belt-and-suspenders on top of pointerdown/touchstart/focusin: some
+      // mobile browsers/WebViews don't dispatch pointer/touch/focus events
+      // at all for interactions with native form controls that have their
+      // own built-in gesture handling - <input type="range">'s thumb-drag
+      // is exactly that. If none of the above ever fire for such a control
+      // on a given platform, suppression never engages and a slider's
+      // dragged-to value gets wiped by the next unrelated hass update
+      // before it's ever committed - indistinguishable from the value
+      // "snapping back". "input" itself is not platform-dependent this way
+      // - every live-updating label next to a slider already relies on it
+      // firing during the drag, so it's a safe universal fallback trigger.
+      this.shadowRoot.addEventListener("input", startSuppression);
     }
   }
 
