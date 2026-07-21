@@ -5,6 +5,14 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.10.1] - 2026-07-21
+
+- Fixed the completion notification service call missing `blocking=True`
+  (caught by the new test suite on CI, not locally) - without it,
+  `hass.services.async_call` schedules the call and returns immediately
+  rather than waiting for it, so the notification could silently not have
+  been sent yet by the time the run's `finally` block finished.
+
 ## [0.10.0] - 2026-07-21
 
 - **Optional mobile notification after a completed run**: pick a device in
