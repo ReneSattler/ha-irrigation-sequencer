@@ -17,7 +17,7 @@ const DOMAIN = "irrigation_sequencer";
 // browser console, whether an update actually took effect versus just
 // looking "the same" as before. Keep this in step with manifest.json's
 // "version" on every release.
-const CARD_VERSION = "0.9.9";
+const CARD_VERSION = "0.10.0";
 // eslint-disable-next-line no-console
 console.info(
   `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
@@ -51,6 +51,8 @@ const TRANSLATIONS = {
     weatherAdjustment: "Weather-based duration",
     weatherEntity: "Weather entity",
     weatherEntityNone: "- none -",
+    notifyTarget: "Notify on completion",
+    notifyNone: "- none -",
     referenceTemp: "Reference temp. (factor 1.0)",
     hotTemp: "Hot temp.",
     hotFactor: "Factor at hot temp.",
@@ -98,6 +100,8 @@ const TRANSLATIONS = {
     weatherAdjustment: "Wetterbasierte Dauer",
     weatherEntity: "Wetter-Entität",
     weatherEntityNone: "- keine -",
+    notifyTarget: "Benachrichtigung nach Abschluss",
+    notifyNone: "- keine -",
     referenceTemp: "Referenztemp. (Faktor 1.0)",
     hotTemp: "Hitzetemp.",
     hotFactor: "Faktor bei Hitzetemp.",
@@ -176,6 +180,12 @@ function friendlyName(hass, entityId) {
 
 function zoneDisplayName(hass, zone) {
   return zone.name?.trim() ? zone.name : friendlyName(hass, zone.entity_id);
+}
+
+/** Turns a notify.mobile_app_* service name into a readable label, e.g.
+ * "mobile_app_pixel_8" -> "pixel 8". */
+function notifyTargetLabel(serviceName) {
+  return serviceName.replace(/^mobile_app_/, "").replace(/_/g, " ");
 }
 
 const MIN_START_TIMES = 1;
@@ -792,12 +802,40 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
             </div>
           </div>
 
+          ${this._renderNotifySection(attrs, t)}
           ${this._renderWeatherSection(attrs, t)}
         </div>
       </ha-card>
     `;
 
     this._attachListeners(zones, t);
+  }
+
+  /** Optional notify.<target> call after a completed run. Populated from
+   * the instance's registered notify.mobile_app_* services (the Companion
+   * App's per-device targets) - "none" (the default) disables it
+   * entirely. */
+  _renderNotifySection(attrs, t) {
+    const notifyServices = this._hass?.services?.notify
+      ? Object.keys(this._hass.services.notify).filter((name) => name.startsWith("mobile_app_"))
+      : [];
+    return `
+      <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4)">
+        <div class="tile-row-icon"><ha-icon icon="mdi:cellphone-message"></ha-icon></div>
+        <div class="tile-row-label">${t.notifyTarget}</div>
+        <div class="tile-row-control">
+          <select id="notify-target">
+            <option value="">${t.notifyNone}</option>
+            ${notifyServices
+              .map(
+                (name) =>
+                  `<option value="${name}" ${name === attrs.notify_target ? "selected" : ""}>${notifyTargetLabel(name)}</option>`
+              )
+              .join("")}
+          </select>
+        </div>
+      </div>
+    `;
   }
 
   _renderZoneRow(zone, index, t) {
@@ -1046,6 +1084,10 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
           minutes: parseInt(value, 10),
         })
       );
+    });
+
+    root.getElementById("notify-target")?.addEventListener("change", (e) => {
+      this._releaseRenderSuppression(this._callService("set_notify_target", { target: e.target.value || null }));
     });
 
     this._attachWeatherListeners(root);

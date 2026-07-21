@@ -151,6 +151,7 @@
       weather_hot_factor: 2.0,
       weather_current_temp: 27,
       weather_current_factor: 1.7,
+      notify_target: null,
     };
     const recomputeEstimatedTotalSeconds = () => {
       statusAttrs.estimated_total_seconds =
@@ -184,6 +185,12 @@
       language: lang,
       locale: { language: lang },
       states,
+      services: {
+        notify: {
+          mobile_app_pixel_8: {},
+          mobile_app_iphone: {},
+        },
+      },
       callService: () => Promise.resolve(),
     };
 
@@ -227,6 +234,7 @@
       }
       if (service === "clear_rain_pause") statusAttrs.rain_pause_until = null;
       if (service === "set_winter_mode") statusAttrs.winter_mode = data.enabled;
+      if (service === "set_notify_target") statusAttrs.notify_target = data.target || null;
       if (service === "set_weather_adjustment") {
         Object.assign(statusAttrs, {
           weather_adjustment_enabled: data.enabled,

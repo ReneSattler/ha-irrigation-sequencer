@@ -5,6 +5,17 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.10.0] - 2026-07-21
+
+- **Optional mobile notification after a completed run**: pick a device in
+  the settings card, sourced from the instance's registered
+  `notify.mobile_app_*` services - defaults to "none" (no notifications).
+  Adds `irrigation_sequencer.set_notify_target`, persisted like the other
+  settings. The notification message follows the instance language (same
+  `hass.config.language` convention as the config flow's default entry
+  name), independent of any per-user setting. Notification failures are
+  logged but never affect the irrigation run itself. Fixes [#28](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/28).
+
 ## [0.9.9] - 2026-07-21
 
 - Fixed the pause-between-zones and rain-pause value text getting pushed

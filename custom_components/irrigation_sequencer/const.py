@@ -54,6 +54,7 @@ SERVICE_SET_RAIN_PAUSE = "set_rain_pause"
 SERVICE_CLEAR_RAIN_PAUSE = "clear_rain_pause"
 SERVICE_SET_WEATHER_ADJUSTMENT = "set_weather_adjustment"
 SERVICE_SET_WINTER_MODE = "set_winter_mode"
+SERVICE_SET_NOTIFY_TARGET = "set_notify_target"
 SERVICE_START_NOW = "start_now"
 SERVICE_STOP = "stop"
 
@@ -76,3 +77,18 @@ ATTR_WEATHER_HOT_TEMP = "weather_hot_temp"
 ATTR_WEATHER_HOT_FACTOR = "weather_hot_factor"
 ATTR_WEATHER_CURRENT_TEMP = "weather_current_temp"
 ATTR_WEATHER_CURRENT_FACTOR = "weather_current_factor"
+ATTR_NOTIFY_TARGET = "notify_target"
+
+# Notification sent after a completed run, when a notify target is
+# configured. Keyed by hass.config.language, same pattern as
+# DEFAULT_NAME_BY_LANGUAGE - falls back to "en" for unmapped languages.
+NOTIFY_MESSAGES_BY_LANGUAGE = {
+    "en": {
+        "title": "Irrigation finished",
+        "message": "Ran for {minutes} minutes.",
+    },
+    "de": {
+        "title": "Bewässerung abgeschlossen",
+        "message": "Lief {minutes} Minuten.",
+    },
+}
