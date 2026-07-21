@@ -478,6 +478,7 @@ class IrrigationSequencerManager:
                     "title": texts["title"],
                     "message": texts["message"].format(minutes=minutes),
                 },
+                blocking=True,
             )
         except Exception as err:  # noqa: BLE001 - best-effort, must not raise
             _LOGGER.warning(
