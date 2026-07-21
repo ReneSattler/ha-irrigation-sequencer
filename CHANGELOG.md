@@ -5,6 +5,19 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.1.2] - 2026-07-21
+
+- **Fixed**: a zone's duration slider/label could revert to displaying its
+  *previous* value right after starting a run, even though the new value
+  was correctly persisted and used for the actual run - confirmed a pure
+  display bug, not a data bug. Rather than continuing to chase the exact
+  render-suppression timing race, the settings card now remembers the last
+  duration the user committed per zone and displays that optimistically
+  until the backend's own attribute value actually matches it - making the
+  display structurally consistent with user intent regardless of
+  hass-update timing/ordering. Verified live with an injected stale-update
+  race. Fixes [#32](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/32).
+
 ## [1.1.1] - 2026-07-21
 
 - **Fixed**: toggling weather adjustment (or any checkbox/select) no longer
