@@ -17,7 +17,7 @@ const DOMAIN = "irrigation_sequencer";
 // browser console, whether an update actually took effect versus just
 // looking "the same" as before. Keep this in step with manifest.json's
 // "version" on every release.
-const CARD_VERSION = "1.1.0";
+const CARD_VERSION = "1.1.1";
 // eslint-disable-next-line no-console
 console.info(
   `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
@@ -348,13 +348,27 @@ class IrrigationSequencerBaseCard extends HTMLElement {
     input.addEventListener("touchend", commit);
   }
 
-  /** True while an input/select/textarea inside this card's shadow root has
-   * focus. Belt-and-suspenders alongside _suppressRender: whatever the
-   * timing of the pointerdown/change-driven flag, never blow away a field
-   * the user is actually, currently typing into. */
+  /** True while a text-like field inside this card's shadow root has focus
+   * and could still be mid-edit. Belt-and-suspenders alongside
+   * _suppressRender: whatever the timing of the pointerdown/change-driven
+   * flag, never blow away a field the user is actually, currently typing
+   * into.
+   *
+   * Deliberately excludes checkboxes, <select>, and range sliders: those
+   * are atomic, one-shot interactions - once toggled/chosen/dragged there
+   * is nothing left to "still be editing", but they commonly keep DOM
+   * focus afterward (on both desktop and mobile) regardless. Treating
+   * them as "still editing" blocked the render scheduled by
+   * _releaseRenderSuppression once its service call resolved, so e.g.
+   * toggling weather adjustment wouldn't show/hide its config section
+   * until something else happened to steal focus (or the page was
+   * refreshed, resetting all state) - not what this guard is for. */
   _isEditingField() {
     const active = this.shadowRoot?.activeElement;
-    return !!active && active.matches?.("input, select, textarea");
+    if (!active) return false;
+    if (active.tagName === "TEXTAREA") return true;
+    if (active.tagName === "INPUT") return !["checkbox", "range"].includes(active.type);
+    return false;
   }
 
   set hass(hass) {
@@ -1193,9 +1207,14 @@ class IrrigationSequencerCardEditorBase extends HTMLElement {
     }
   }
 
+  /** See the base card's _isEditingField() for why checkboxes/select/range
+   * are excluded - same reasoning applies to the visual editor's fields. */
   _isEditingField() {
     const active = this.shadowRoot?.activeElement;
-    return !!active && active.matches?.("input, select, textarea");
+    if (!active) return false;
+    if (active.tagName === "TEXTAREA") return true;
+    if (active.tagName === "INPUT") return !["checkbox", "range"].includes(active.type);
+    return false;
   }
 
   _scheduleRenderResume(delayMs) {

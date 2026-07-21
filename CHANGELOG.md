@@ -5,6 +5,18 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.1.1] - 2026-07-21
+
+- **Fixed**: toggling weather adjustment (or any checkbox/select) no longer
+  needed a full page refresh to show/hide its dependent section live.
+  `_isEditingField()` treated any focused `input, select, textarea` as
+  "still being edited" and kept blocking the render scheduled after the
+  toggle's own service call resolved - but a checkbox/select/range slider
+  is an atomic, one-shot interaction with nothing left to "still edit"
+  once it's flipped/chosen/dragged, even though it commonly keeps DOM
+  focus afterward. Narrowed the guard to text/number inputs and
+  textareas only. Fixes [#31](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/31).
+
 ## [1.1.0] - 2026-07-21
 
 - **Icon now shows up in Devices & Services**: corrects what v0.3.1
