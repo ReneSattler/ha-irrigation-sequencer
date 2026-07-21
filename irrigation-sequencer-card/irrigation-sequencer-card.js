@@ -17,7 +17,7 @@ const DOMAIN = "irrigation_sequencer";
 // browser console, whether an update actually took effect versus just
 // looking "the same" as before. Keep this in step with manifest.json's
 // "version" on every release.
-const CARD_VERSION = "1.1.1";
+const CARD_VERSION = "1.1.2";
 // eslint-disable-next-line no-console
 console.info(
   `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
@@ -759,6 +759,16 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
     const title = this._config.title || t.settingsCardTitle;
     const layout = this._config.layout === "horizontal" ? "horizontal" : "vertical";
 
+    // Drop any pending optimistic duration override once the backend's own
+    // attribute value has actually caught up to it (see _renderZoneRow).
+    if (this._pendingZoneDurations?.size) {
+      for (const zone of zones) {
+        if (this._pendingZoneDurations.get(zone.entity_id) === zone.duration_minutes) {
+          this._pendingZoneDurations.delete(zone.entity_id);
+        }
+      }
+    }
+
     this.shadowRoot.innerHTML = `
       <style>${this._sharedStyles()}</style>
       <ha-card class="${layout === "horizontal" ? "layout-horizontal" : ""}">
@@ -853,6 +863,13 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
   }
 
   _renderZoneRow(zone, index, t) {
+    // Optimistic override: show what the user last committed for this
+    // zone's duration until the backend's own attribute actually catches up
+    // (cleared in _render()) - makes the displayed value structurally
+    // consistent with user intent regardless of hass-update timing/ordering,
+    // instead of depending on the render-suppression timers firing in
+    // exactly the right order relative to the backend round trip.
+    const durationMinutes = this._pendingZoneDurations?.get(zone.entity_id) ?? zone.duration_minutes;
     return `
       <div class="tile-row zone-row" style="--tile-color: var(--success-color, #4caf50);" data-index="${index}" data-entity="${zone.entity_id}">
         <div class="drag-handle" draggable="true" title="${t.dragHandle}"><ha-icon icon="mdi:drag-vertical"></ha-icon></div>
@@ -860,8 +877,8 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
         <div class="tile-row-control" style="flex-direction: column; align-items: stretch; gap: 6px;">
           <input type="text" class="zone-name" data-entity="${zone.entity_id}" placeholder="${t.zoneNamePlaceholder}" value="${zoneDisplayName(this._hass, zone)}" />
           <div style="display:flex; align-items:center; gap:8px;">
-            <input type="range" min="1" max="30" value="${zone.duration_minutes}" class="zone-duration" data-entity="${zone.entity_id}" />
-            <span class="tile-row-value">${zone.duration_minutes} min</span>
+            <input type="range" min="1" max="30" value="${durationMinutes}" class="zone-duration" data-entity="${zone.entity_id}" />
+            <span class="tile-row-value">${durationMinutes} min</span>
           </div>
         </div>
       </div>
@@ -1092,12 +1109,12 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
       input.addEventListener("input", (e) => {
         e.target.nextElementSibling.textContent = `${e.target.value} min`;
       });
-      this._attachRangeCommit(input, (value) =>
-        this._callService("set_zone_duration", {
-          entity_id: input.dataset.entity,
-          minutes: parseInt(value, 10),
-        })
-      );
+      this._attachRangeCommit(input, (value) => {
+        const minutes = parseInt(value, 10);
+        if (!this._pendingZoneDurations) this._pendingZoneDurations = new Map();
+        this._pendingZoneDurations.set(input.dataset.entity, minutes);
+        return this._callService("set_zone_duration", { entity_id: input.dataset.entity, minutes });
+      });
     });
 
     root.getElementById("notify-target")?.addEventListener("change", (e) => {
