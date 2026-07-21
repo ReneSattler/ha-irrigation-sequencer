@@ -5,6 +5,15 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [0.9.9] - 2026-07-21
+
+- Fixed the pause-between-zones and rain-pause value text getting pushed
+  off-screen on narrow phones - `.tile-row` (used for most settings-card
+  rows) never wrapped, and its label had a fixed non-shrinking 130px
+  min-width, so icon + label + slider + value could add up to more than
+  the available width. Row now wraps the control (slider + value) onto its
+  own line when needed instead of overflowing. Fixes [#29](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/29).
+
 ## [0.9.8] - 2026-07-20
 
 - Confirmed via the backend that the zone-duration value genuinely never

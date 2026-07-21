@@ -17,7 +17,7 @@ const DOMAIN = "irrigation_sequencer";
 // browser console, whether an update actually took effect versus just
 // looking "the same" as before. Keep this in step with manifest.json's
 // "version" on every release.
-const CARD_VERSION = "0.9.8";
+const CARD_VERSION = "0.9.9";
 // eslint-disable-next-line no-console
 console.info(
   `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
@@ -504,13 +504,13 @@ class IrrigationSequencerBaseCard extends HTMLElement {
       .tile-icon-btn.danger { background: var(--error-color, #db4437); color: white; }
       .tile-icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
-      .tile-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px;
+      .tile-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px;
         background: var(--secondary-background-color, rgba(127,127,127,0.08)); margin-top: 8px; }
       .tile-row-icon { width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; display: flex;
         align-items: center; justify-content: center; background: color-mix(in srgb, var(--tile-color, var(--primary-color)) 18%, transparent);
         color: var(--tile-color, var(--primary-color)); }
       .tile-row-label { flex: 0 0 auto; min-width: 130px; font-size: 0.88em; color: var(--primary-text-color); }
-      .tile-row-control { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+      .tile-row-control { flex: 1 1 180px; display: flex; align-items: center; gap: 8px; min-width: 0; }
       .tile-row-control input[type="range"] { flex: 1; accent-color: var(--tile-color, var(--primary-color)); height: 6px; touch-action: none; }
       .tile-row-control input[type="number"],
       .tile-row-control input[type="time"],
