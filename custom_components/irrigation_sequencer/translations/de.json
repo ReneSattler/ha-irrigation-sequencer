@@ -96,6 +96,10 @@
       "name": "Wintermodus setzen",
       "description": "Aktiviert oder deaktiviert den Wintermodus, der die Bewässerung komplett deaktiviert, solange er an ist."
     },
+    "set_notify_target": {
+      "name": "Benachrichtigungsziel setzen",
+      "description": "Legt fest (oder entfernt), welcher Notify-Dienst nach einem abgeschlossenen Bewässerungslauf benachrichtigt wird. Dienstname ohne \"notify.\"-Präfix angeben (z. B. \"mobile_app_mein_handy\"); target weglassen, um Benachrichtigungen zu deaktivieren."
+    },
     "set_weather_adjustment": {
       "name": "Wetter-Anpassung setzen",
       "description": "Konfiguriert die temperaturabhängige Dauer-Anpassung. Die Dauer jeder Zone wird mit einem Faktor multipliziert, der linear aus der aktuellen Temperatur der gewählten Wetter-Entität berechnet wird: Faktor 1.0 bei reference_temp, hot_factor bei hot_temp."

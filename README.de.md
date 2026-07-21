@@ -52,6 +52,11 @@ im Browser ausprobieren kannst.*
   Status-Card zeigt zusätzlich die Tageshöchsttemperatur laut Prognose (sofern
   die Wetter-Entität eine liefert) und den daraus resultierenden Faktor – so
   siehst du schon vorab, wie der nächste Lauf ausfallen würde.
+- **Optionale Mobile-Benachrichtigung** – in der Settings-Card ein Gerät
+  auswählen (aus deinen `notify.mobile_app_*`-Diensten), um nach jedem
+  abgeschlossenen Lauf eine Benachrichtigung mit der Dauer zu erhalten;
+  Standard ist "keine" (keine Benachrichtigungen). Der Text folgt der
+  Instanzsprache, genau wie die Cards.
 
 ## Voraussetzungen
 
@@ -82,7 +87,7 @@ Hauptanwendungsfall ist.
 2. Datei `irrigation-sequencer-card/irrigation-sequencer-card.js` nach
    `config/www/` kopieren
 3. Unter **Einstellungen → Dashboards → Ressourcen** die Datei
-   `/local/irrigation-sequencer-card.js?v=0.9.9` als JavaScript-Modul
+   `/local/irrigation-sequencer-card.js?v=0.10.0` als JavaScript-Modul
    hinzufügen (der `?v=...`-Teil ist wichtig - siehe Hinweis unten)
 4. Home Assistant neu starten und die Integration wie oben beschrieben einrichten
 
@@ -159,6 +164,7 @@ eigene Automationen:
 | `irrigation_sequencer.clear_rain_pause` | Regen-Pause sofort aufheben |
 | `irrigation_sequencer.set_winter_mode` | Wintermodus aktivieren/deaktivieren |
 | `irrigation_sequencer.set_weather_adjustment` | Temperaturabhängige Dauer-Anpassung konfigurieren |
+| `irrigation_sequencer.set_notify_target` | Benachrichtigungsziel nach Abschluss setzen (oder entfernen) |
 
 Die `entry_id` findest du als Attribut am Status-Sensor der Integration.
 

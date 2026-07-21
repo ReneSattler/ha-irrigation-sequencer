@@ -119,6 +119,22 @@ set_winter_mode:
       selector:
         boolean:
 
+set_notify_target:
+  name: Set notify target
+  description: >-
+    Sets (or clears) the notify service to message after a completed
+    irrigation run. Pass the service name without the "notify." prefix
+    (e.g. "mobile_app_my_phone"); omit target to disable notifications.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    target:
+      required: false
+      selector:
+        text:
+
 set_weather_adjustment:
   name: Set weather adjustment
   description: >-

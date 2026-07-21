@@ -22,6 +22,7 @@ from .const import (
     SERVICE_SET_PAUSE_BETWEEN_ZONES,
     SERVICE_SET_RAIN_PAUSE,
     SERVICE_SET_START_TIMES,
+    SERVICE_SET_NOTIFY_TARGET,
     SERVICE_SET_WEATHER_ADJUSTMENT,
     SERVICE_SET_WINTER_MODE,
     SERVICE_SET_ZONE_DURATION,
@@ -88,6 +89,12 @@ SET_WINTER_MODE_SCHEMA = vol.Schema(
     {
         vol.Required("entry_id"): cv.string,
         vol.Required("enabled"): cv.boolean,
+    }
+)
+SET_NOTIFY_TARGET_SCHEMA = vol.Schema(
+    {
+        vol.Required("entry_id"): cv.string,
+        vol.Optional("target"): vol.Any(cv.string, None),
     }
 )
 ENTRY_ID_ONLY_SCHEMA = vol.Schema({vol.Required("entry_id"): cv.string})
@@ -179,6 +186,10 @@ def _async_register_services(hass: HomeAssistant) -> None:
         manager = _get_manager(hass, call.data["entry_id"])
         await manager.async_set_winter_mode(call.data["enabled"])
 
+    async def handle_set_notify_target(call: ServiceCall) -> None:
+        manager = _get_manager(hass, call.data["entry_id"])
+        await manager.async_set_notify_target(call.data.get("target"))
+
     async def handle_start_now(call: ServiceCall) -> None:
         manager = _get_manager(hass, call.data["entry_id"])
         await manager.async_start_now()
@@ -222,6 +233,12 @@ def _async_register_services(hass: HomeAssistant) -> None:
     )
     hass.services.async_register(
         DOMAIN, SERVICE_SET_WINTER_MODE, handle_set_winter_mode, schema=SET_WINTER_MODE_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_NOTIFY_TARGET,
+        handle_set_notify_target,
+        schema=SET_NOTIFY_TARGET_SCHEMA,
     )
     hass.services.async_register(
         DOMAIN, SERVICE_START_NOW, handle_start_now, schema=ENTRY_ID_ONLY_SCHEMA

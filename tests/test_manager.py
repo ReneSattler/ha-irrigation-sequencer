@@ -244,3 +244,67 @@ async def test_weather_factor_clamped_to_min(hass: HomeAssistant) -> None:
     hass.states.async_set("weather.home", "sunny", {"temperature": -50.0})
 
     assert manager.weather_current_factor == pytest.approx(0.1)
+
+
+# --------------------------------------------------------------------- #
+# Notify target / completion notification
+# --------------------------------------------------------------------- #
+
+
+async def test_set_notify_target(hass: HomeAssistant) -> None:
+    manager = make_manager(hass)
+    await manager.async_set_notify_target("mobile_app_test_phone")
+    assert manager.notify_target == "mobile_app_test_phone"
+
+
+async def test_set_notify_target_empty_string_clears_it(hass: HomeAssistant) -> None:
+    manager = make_manager(hass)
+    await manager.async_set_notify_target("mobile_app_test_phone")
+    await manager.async_set_notify_target("")
+    assert manager.notify_target is None
+
+
+async def test_completion_notification_not_sent_when_no_target(hass: HomeAssistant) -> None:
+    manager = make_manager(hass)
+    calls = []
+    hass.services.async_register("notify", "mobile_app_test_phone", lambda call: calls.append(call.data))
+
+    await manager._async_send_completion_notification(300)  # noqa: SLF001
+
+    assert calls == []
+
+
+async def test_completion_notification_sent_in_english(hass: HomeAssistant) -> None:
+    manager = make_manager(hass)
+    manager.notify_target = "mobile_app_test_phone"
+    hass.config.language = "en"
+    calls = []
+    hass.services.async_register("notify", "mobile_app_test_phone", lambda call: calls.append(call.data))
+
+    await manager._async_send_completion_notification(300)  # noqa: SLF001
+
+    assert len(calls) == 1
+    assert calls[0]["title"] == "Irrigation finished"
+    assert calls[0]["message"] == "Ran for 5 minutes."
+
+
+async def test_completion_notification_sent_in_german(hass: HomeAssistant) -> None:
+    manager = make_manager(hass)
+    manager.notify_target = "mobile_app_test_phone"
+    hass.config.language = "de"
+    calls = []
+    hass.services.async_register("notify", "mobile_app_test_phone", lambda call: calls.append(call.data))
+
+    await manager._async_send_completion_notification(300)  # noqa: SLF001
+
+    assert calls[0]["title"] == "Bewässerung abgeschlossen"
+    assert calls[0]["message"] == "Lief 5 Minuten."
+
+
+async def test_completion_notification_failure_does_not_raise(hass: HomeAssistant) -> None:
+    manager = make_manager(hass)
+    # No notify.mobile_app_missing service registered - the call should
+    # fail internally and be swallowed, not propagate.
+    manager.notify_target = "mobile_app_missing"
+
+    await manager._async_send_completion_notification(60)  # noqa: SLF001

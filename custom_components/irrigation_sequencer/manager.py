@@ -23,6 +23,7 @@ from .const import (
     MAX_WEATHER_FACTOR,
     MIN_START_TIMES,
     MIN_WEATHER_FACTOR,
+    NOTIFY_MESSAGES_BY_LANGUAGE,
     STATE_IDLE,
     STATE_PAUSED_BETWEEN_ZONES,
     STATE_RAIN_PAUSE,
@@ -56,6 +57,9 @@ class IrrigationSequencerManager:
         self.start_times: list[str] = [DEFAULT_START_TIME]
         self.winter_mode: bool = False
         self.rain_pause_until: str | None = None
+        # Notify service name (e.g. "mobile_app_my_phone", the part after
+        # "notify.") to message after a completed run, or None to disable.
+        self.notify_target: str | None = None
 
         self.weather_adjustment_enabled: bool = False
         self.weather_entity: str | None = None
@@ -106,6 +110,7 @@ class IrrigationSequencerManager:
                 self.start_times = [data["start_time"]]
             self.winter_mode = data.get("winter_mode", False)
             self.rain_pause_until = data.get("rain_pause_until")
+            self.notify_target = data.get("notify_target")
 
             self.weather_adjustment_enabled = data.get("weather_adjustment_enabled", False)
             self.weather_entity = data.get("weather_entity")
@@ -125,6 +130,7 @@ class IrrigationSequencerManager:
                 "start_times": self.start_times,
                 "winter_mode": self.winter_mode,
                 "rain_pause_until": self.rain_pause_until,
+                "notify_target": self.notify_target,
                 "weather_adjustment_enabled": self.weather_adjustment_enabled,
                 "weather_entity": self.weather_entity,
                 "weather_reference_temp": self.weather_reference_temp,
@@ -232,6 +238,11 @@ class IrrigationSequencerManager:
 
     async def async_set_winter_mode(self, enabled: bool) -> None:
         self.winter_mode = enabled
+        await self._async_save()
+        self._notify_listeners()
+
+    async def async_set_notify_target(self, target: str | None) -> None:
+        self.notify_target = target or None
         await self._async_save()
         self._notify_listeners()
 
@@ -440,6 +451,7 @@ class IrrigationSequencerManager:
         finally:
             for zone in self.zones:
                 await self._async_set_valve(zone["entity_id"], False)
+            elapsed_seconds = max(0, total_seconds - self.seconds_remaining_total)
             self.status = STATE_IDLE
             self.current_zone_index = None
             self.last_zone_index = None
@@ -447,6 +459,32 @@ class IrrigationSequencerManager:
             self.seconds_remaining_total = 0
             self._stop_requested = False
             self._notify_listeners()
+            await self._async_send_completion_notification(elapsed_seconds)
+
+    async def _async_send_completion_notification(self, elapsed_seconds: int) -> None:
+        """Best-effort notify.<target> call after a run - never lets a
+        notification failure affect the irrigation run itself, which has
+        already fully finished by the time this runs."""
+        if not self.notify_target:
+            return
+        language = self.hass.config.language
+        texts = NOTIFY_MESSAGES_BY_LANGUAGE.get(language, NOTIFY_MESSAGES_BY_LANGUAGE["en"])
+        minutes = max(1, round(elapsed_seconds / 60))
+        try:
+            await self.hass.services.async_call(
+                "notify",
+                self.notify_target,
+                {
+                    "title": texts["title"],
+                    "message": texts["message"].format(minutes=minutes),
+                },
+            )
+        except Exception as err:  # noqa: BLE001 - best-effort, must not raise
+            _LOGGER.warning(
+                "Failed to send irrigation-finished notification to notify.%s: %s",
+                self.notify_target,
+                err,
+            )
 
     async def _async_set_valve(self, entity_id: str, turn_on: bool) -> None:
         # Zones can be valve, switch, or light entities (the last one mostly

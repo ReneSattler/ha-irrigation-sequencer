@@ -47,6 +47,11 @@ Home Assistant instance.*
   5-minute zone runs for 7.5 minutes. The status card also shows today's
   forecast high (when the weather entity provides one) and the factor it
   would result in, so you can see tomorrow's plan at a glance.
+- **Optional mobile notification** - pick a device from the settings card
+  (sourced from your `notify.mobile_app_*` services) to get a notification
+  after each completed run with its duration; defaults to "none" (no
+  notifications). The message follows the instance language, same as the
+  cards.
 
 ## Requirements
 
@@ -76,7 +81,7 @@ for experimenting even though it isn't the primary use case.
 2. Copy `irrigation-sequencer-card/irrigation-sequencer-card.js` into
    `config/www/`
 3. Under **Settings → Dashboards → Resources**, add
-   `/local/irrigation-sequencer-card.js?v=0.9.9` as a JavaScript module (the
+   `/local/irrigation-sequencer-card.js?v=0.10.0` as a JavaScript module (the
    `?v=...` part matters - see note below)
 4. Restart Home Assistant and set up the integration as described above
 
@@ -151,6 +156,7 @@ automations:
 | `irrigation_sequencer.clear_rain_pause` | Clear an active rain pause |
 | `irrigation_sequencer.set_winter_mode` | Enable or disable winter mode |
 | `irrigation_sequencer.set_weather_adjustment` | Configure temperature-based duration adjustment |
+| `irrigation_sequencer.set_notify_target` | Set (or clear) the notify target messaged after a completed run |
 
 You can find the `entry_id` as an attribute on the integration's status
 sensor.
