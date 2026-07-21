@@ -5,6 +5,20 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.0.0] - 2026-07-21
+
+First stable release. Feature set: multi-zone sequencing with per-zone
+name/duration/order, pause between zones, 1-3 daily start times with
+overlap protection, winter mode, rain pause (0-24 days), weather-based
+duration adjustment with a forecast preview, optional mobile notification
+on completion, two Lovelace cards (status + settings) with a
+vertical/horizontal layout option, and an automated test suite for the
+backend logic running on every push via GitHub Actions. No functional
+changes from 0.10.1 - this tag marks the point where the integration has
+been tested against real hardware and real usage over multiple days and
+is considered ready for general use, not a pre-release under active
+testing.
+
 ## [0.10.1] - 2026-07-21
 
 - Fixed the completion notification service call missing `blocking=True`
