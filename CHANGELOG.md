@@ -5,6 +5,19 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.1.0] - 2026-07-21
+
+- **Icon now shows up in Devices & Services**: corrects what v0.3.1
+  documented as a hard platform limitation - that was accurate for older
+  HA versions, but as of HA 2026.3.0, custom integrations can bundle their
+  own brand icon directly via a `brand/` folder (see the [Brands Proxy API
+  announcement](https://developers.home-assistant.io/blog/2026/02/24/brands-proxy-api)),
+  no `home-assistant/brands` PR needed anymore. Added
+  `custom_components/irrigation_sequencer/brand/icon.png` +
+  `icon@2x.png`. Requires HA 2026.3.0+. The integration's *name* in that
+  same list still can't be localized - that part of the limitation still
+  stands, unrelated to this fix. Fixes [#30](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/30).
+
 ## [1.0.0] - 2026-07-21
 
 First stable release. Feature set: multi-zone sequencing with per-zone
