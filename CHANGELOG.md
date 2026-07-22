@@ -5,6 +5,17 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.1.5] - 2026-07-22
+
+- Documentation only: corrected 1.1.4's claim that this repo can be added
+  to HACS twice (once per category) - a user confirmed HACS rejects a
+  second custom-repository add for the same URL with "exists in the
+  store," even with a different category selected. Updated instructions
+  to recommend Dashboard via HACS (for the cards) plus a manual copy of
+  `custom_components/irrigation_sequencer` (for the backend), with
+  category-swapping as an alternative if HACS-tracked backend updates are
+  wanted occasionally.
+
 ## [1.1.4] - 2026-07-22
 
 - Documentation only: clarified the HACS installation instructions after
