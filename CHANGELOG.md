@@ -5,6 +5,17 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.2.5] - 2026-07-22
+
+- Fixed: changing a zone's duration (or name) didn't live-update the status
+  card's timeline - only pause-between-zones changes did. Root cause:
+  `extra_state_attributes` hands out the zones list by reference, and
+  `async_set_zone_duration`/`async_set_zone_name` mutated the existing
+  zone dicts in place instead of replacing them, so Home Assistant's
+  state-diffing saw the "old" and "new" zones attribute as the literal
+  same (already-mutated) object and never detected a change. Now builds
+  fresh list/dict objects on every zone change. Added regression tests.
+
 ## [1.2.4] - 2026-07-22
 
 - Documentation only: expanded the "close and reopen the tab" tip to also
