@@ -5,6 +5,15 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.1.6] - 2026-07-22
+
+- Documentation only: added explicit steps for a completely fresh install
+  (nothing installed yet) - install as Integration first, remove that HACS
+  tracking entry (confirmed this does not delete already-downloaded
+  files), then re-add as Dashboard for the cards. Previously the
+  instructions only covered the case where the backend was already
+  installed manually.
+
 ## [1.1.5] - 2026-07-22
 
 - Documentation only: corrected 1.1.4's claim that this repo can be added
