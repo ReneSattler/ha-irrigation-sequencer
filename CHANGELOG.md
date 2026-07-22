@@ -5,6 +5,19 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.1.3] - 2026-07-22
+
+- **Fixed HACS not being able to properly discover/install the frontend
+  plugin**: confirmed by reading HACS's own source
+  (`repositories/plugin.py`, `update_filenames()`/`generate_dashboard_resource_url()`)
+  that a `hacs.json` `filename` containing a subdirectory path causes HACS
+  to log "have defined an invalid file name" and mismatches the actual
+  file location against the dashboard resource URL it registers. Moved
+  `irrigation-sequencer-card.js` from the `irrigation-sequencer-card/`
+  subdirectory to the repository root (HACS requires the plugin JS file to
+  live at the repo root or in a `dist/` folder) and updated `hacs.json`'s
+  `filename` to the bare filename. Fixes [#33](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/33).
+
 ## [1.1.2] - 2026-07-21
 
 - **Fixed**: a zone's duration slider/label could revert to displaying its
