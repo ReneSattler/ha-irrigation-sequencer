@@ -5,6 +5,17 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.2.4] - 2026-07-22
+
+- Documentation only: expanded the "close and reopen the tab" tip to also
+  cover cards showing "Configuration error" or vanishing after adding or
+  removing a zone (same stale-tab cause), plus a pointer to filter the
+  browser console for "irrigation" to rule out unrelated custom-card
+  errors before assuming this integration is at fault. Investigated a live
+  report where the console showed real errors, but all from other
+  installed HACS cards - the cards recovered after closing/reopening the
+  browser, no code issue found.
+
 ## [1.2.3] - 2026-07-22
 
 - Documentation only: added a note to use "Restart Home Assistant", not
