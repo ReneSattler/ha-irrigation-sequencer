@@ -81,7 +81,15 @@ Ein Update des einen HACS-Eintrags aktualisiert Backend und Cards zusammen.
 2. `https://github.com/ReneSattler/ha-irrigation-sequencer` hinzufügen, Typ
    **Integration** → **Hinzufügen**, dann "Irrigation Sequencer" in der
    HACS-Integrationen-Liste suchen und den Download-Button anklicken
-3. Home Assistant neu starten
+3. Home Assistant neu starten – dabei unbedingt **"Home Assistant neu
+   starten"** wählen (Einstellungen → System → **Neu starten** →
+   "Home Assistant neu starten"), nicht "Schnelles Neuladen". Schnelles
+   Neuladen lädt nur die YAML-Konfiguration neu, nicht den Python-Code von
+   Custom Components – nach einem Update würde HA dann kommentarlos mit
+   der alten Version weiterlaufen, ohne Fehlermeldung. Die angezeigte
+   Version unter Einstellungen → Geräte & Dienste → Irrigation Sequencer
+   würde dann nicht zu dem passen, was HACS als installiert meldet. Falls
+   das mal passiert: einfach einen echten Neustart nachholen, das behebt es.
 4. **Einstellungen → Geräte & Dienste → Integration hinzufügen** →
    "Irrigation Sequencer" suchen und einrichten (1 bis 10
    Ventil-/Steckdosen-Entitäten auswählen)
@@ -92,8 +100,8 @@ Ein Update des einen HACS-Eintrags aktualisiert Backend und Cards zusammen.
 
 1. Ordner `custom_components/irrigation_sequencer` in dein
    `config/custom_components/`-Verzeichnis kopieren
-2. Home Assistant neu starten und die Integration wie oben beschrieben
-   einrichten
+2. Home Assistant neu starten (siehe Hinweis "Neu starten" vs. "Schnelles
+   Neuladen" oben) und die Integration wie oben beschrieben einrichten
 
 Die Cards melden sich genauso selbst an wie bei der HACS-Installation – bei
 keinem der beiden Installationswege ist ein Kopieren nach `www/` oder eine
