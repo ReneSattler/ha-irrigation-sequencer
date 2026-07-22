@@ -5,6 +5,19 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.2.0] - 2026-07-22
+
+- The integration now self-hosts the Lovelace card and registers it
+  automatically on startup (`custom_components/irrigation_sequencer/frontend/`,
+  served via a static path + `add_extra_js_url`, matching the pattern used
+  by many other custom integrations). This removes the two-HACS-category
+  split entirely: **HACS Integration** is now the only category needed -
+  one repository entry, one download, cards and backend update together.
+  Manual installs are simplified the same way - just copy
+  `custom_components/irrigation_sequencer/`, no `www/` copy or Lovelace
+  resource needed. Raises the minimum Home Assistant version to 2024.7.0
+  (`hass.http.async_register_static_paths`).
+
 ## [1.1.7] - 2026-07-22
 
 - Documentation only: reverted 1.1.6's "add as Integration, download,

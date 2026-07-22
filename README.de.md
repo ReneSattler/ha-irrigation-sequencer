@@ -70,57 +70,34 @@ Hauptanwendungsfall ist.
 
 ## Installation über HACS
 
-Dieses Repository liefert **zwei getrennte Dinge** – die Backend-Integration
-(landet in `custom_components/`) und die Lovelace-Cards (landet in
-`www/community/`). HACS lässt offenbar **nur eine Kategorie pro
-Repository-URL gleichzeitig** als benutzerdefiniertes Repository zu
-(dieselbe URL ein zweites Mal mit anderem Typ hinzuzufügen wird mit
-*"Repository ... existiert bereits im Store"* abgelehnt) – beide Teile
-gleichzeitig über HACS zu tracken ist also nicht praktikabel. Stattdessen:
+Das ist ein einziger HACS-Eintrag, Kategorie **Integration**. Die Cards
+stecken in der Integration und melden sich beim Start automatisch selbst an
+– kein separater "Dashboard"-Eintrag, keine manuelle Lovelace-Ressource und
+keine `?v=...`-Cache-Busting-Strings mehr, um die man sich kümmern muss.
+Ein Update des einen HACS-Eintrags aktualisiert Backend und Cards zusammen.
 
-- **Cards → über HACS.** HACS → oben rechts auf die drei Punkte →
-  **Benutzerdefinierte Repositories** → hinzufügen:
-  `https://github.com/ReneSattler/ha-irrigation-sequencer`, Typ
-  **Dashboard** (so heißt in der aktuellen HACS-Version das, was früher
-  "Plugin (Frontend)" hieß) → **Hinzufügen**, dann in der
-  HACS-Dashboard/Frontend-Liste suchen und herunterladen. Damit bekommst du
-  künftig Update-Hinweise für die Cards.
-- **Backend-Integration → einmalig manuell kopieren.** Das
-  [neueste Release](https://github.com/ReneSattler/ha-irrigation-sequencer/releases/latest)
-  herunterladen (oder das Repo klonen) und den Ordner
-  `custom_components/irrigation_sequencer` in deinen
-  `config/custom_components/`-Ordner kopieren (z. B. über das
-  File-editor-/Studio-Code-Server-Add-on, Samba oder SSH). Das ändert sich
-  selten – ein manuelles Kopieren bei Installation/Update ist ein kleiner
-  Preis dafür, sich die ganze HACS-Kategorie-Tauscherei zu sparen.
-
-Nachdem beides vorhanden ist, Home Assistant neu starten, dann:
-
-1. **Einstellungen → Geräte & Dienste → Integration hinzufügen** →
+1. HACS → oben rechts auf die drei Punkte → **Benutzerdefinierte
+   Repositories**
+2. `https://github.com/ReneSattler/ha-irrigation-sequencer` hinzufügen, Typ
+   **Integration** → **Hinzufügen**, dann "Irrigation Sequencer" in der
+   HACS-Integrationen-Liste suchen und den Download-Button anklicken
+3. Home Assistant neu starten
+4. **Einstellungen → Geräte & Dienste → Integration hinzufügen** →
    "Irrigation Sequencer" suchen und einrichten (1 bis 10
    Ventil-/Steckdosen-Entitäten auswählen)
-2. Die Cards zu einem Dashboard hinzufügen (siehe "Cards einrichten" unten)
+5. Die Cards zu einem Dashboard hinzufügen (siehe "Cards einrichten" unten)
+   – sie sind bereits verfügbar, kein weiterer Schritt nötig
 
 ## Manuelle Installation
 
-1. Ordner `custom_components/irrigation_sequencer` in dein `config/custom_components/`
-   Verzeichnis kopieren
-2. Datei `irrigation-sequencer-card.js` nach `config/www/` kopieren
-3. Unter **Einstellungen → Dashboards → Ressourcen** die Datei
-   `/local/irrigation-sequencer-card.js?v=1.1.7` als JavaScript-Modul
-   hinzufügen (der `?v=...`-Teil ist wichtig - siehe Hinweis unten)
-4. Home Assistant neu starten und die Integration wie oben beschrieben einrichten
+1. Ordner `custom_components/irrigation_sequencer` in dein
+   `config/custom_components/`-Verzeichnis kopieren
+2. Home Assistant neu starten und die Integration wie oben beschrieben
+   einrichten
 
-> **Manuelle Installation aktualisieren**: Browser (vor allem am Handy)
-> können die einfache `.js`-Datei unbegrenzt zwischenspeichern und liefern
-> nach dem Kopieren eines Updates stillschweigend weiter die alte Version
-> aus - ohne erkennbaren Hinweis, dass etwas veraltet ist. Ändere bei jedem
-> manuellen Update den `?v=...`-Teil der Ressourcen-URL (Einstellungen →
-> Dashboards → Ressourcen → bearbeiten) auf die neue Version, damit der
-> Browser gezwungen wird, die Datei neu zu laden. Zur Kontrolle, welche
-> Version tatsächlich geladen wurde, öffne die Browser-Konsole (F12) - die
-> Card loggt ihre Version beim Laden. Bei Installation über HACS passiert
-> das automatisch, dieser Schritt entfällt dann.
+Die Cards melden sich genauso selbst an wie bei der HACS-Installation – bei
+keinem der beiden Installationswege ist ein Kopieren nach `www/` oder eine
+manuelle Lovelace-Ressource nötig.
 
 ## Cards einrichten
 

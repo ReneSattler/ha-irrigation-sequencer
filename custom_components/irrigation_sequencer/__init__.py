@@ -3,11 +3,17 @@ pauses, night start, winter mode, rain pause and weather-based duration
 adjustment."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import voluptuous as vol
 
+from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.typing import ConfigType
+from homeassistant.loader import async_get_integration
 
 from .const import (
     CONF_ZONE_ENTITIES,
@@ -98,6 +104,21 @@ SET_NOTIFY_TARGET_SCHEMA = vol.Schema(
     }
 )
 ENTRY_ID_ONLY_SCHEMA = vol.Schema({vol.Required("entry_id"): cv.string})
+
+FRONTEND_URL_BASE = f"/{DOMAIN}_files"
+CARD_FILENAME = "irrigation-sequencer-card.js"
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Self-host the Lovelace card so it loads automatically - no separate
+    HACS "Dashboard" download or manual resource registration needed."""
+    integration = await async_get_integration(hass, DOMAIN)
+    frontend_dir = Path(integration.file_path) / "frontend"
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig(FRONTEND_URL_BASE, str(frontend_dir), cache_headers=False)]
+    )
+    add_extra_js_url(hass, f"{FRONTEND_URL_BASE}/{CARD_FILENAME}?v={integration.version}")
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
