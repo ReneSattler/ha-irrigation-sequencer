@@ -70,15 +70,35 @@ Hauptanwendungsfall ist.
 
 ## Installation über HACS
 
-1. HACS öffnen → **Integrationen** (bzw. **Frontend** für die Cards) → oben
-   rechts auf die drei Punkte → **Benutzerdefinierte Repositories**
-2. Repository-URL hinzufügen: `https://github.com/ReneSattler/ha-irrigation-sequencer`
-   - Kategorie **Integration** hinzufügen → installiert die Backend-Logik
-   - Kategorie **Plugin (Frontend)** hinzufügen → installiert die Lovelace-Cards
-3. Home Assistant neu starten
-4. **Einstellungen → Geräte & Dienste → Integration hinzufügen** →
+Dieses Repository liefert **zwei getrennte Dinge** – die Backend-Integration
+und die Lovelace-Cards – und muss deshalb **zweimal** zu HACS hinzugefügt
+werden, jeweils mit derselben URL, aber unterschiedlicher Kategorie:
+
+1. HACS → oben rechts auf die drei Punkte → **Benutzerdefinierte
+   Repositories**
+2. Repository-URL hinzufügen: `https://github.com/ReneSattler/ha-irrigation-sequencer`,
+   Typ **Integration** wählen → **Hinzufügen**
+3. Dieselbe URL noch einmal hinzufügen, diesmal mit Typ **Dashboard** (so
+   heißt in der aktuellen HACS-Version das, was früher "Plugin (Frontend)"
+   hieß – im Typ-Dropdown danach suchen, es gibt keine separate
+   "Plugin"-Option mehr) → **Hinzufügen**
+4. Jetzt sollten zwei getrennte Zeilen für dieses Repository in der Liste
+   stehen, eine pro Kategorie. Das Hinzufügen allein installiert es noch
+   nicht – "Irrigation Sequencer" sowohl in der HACS-**Integrationen**-Liste
+   als auch in der **Dashboard**/Frontend-Liste suchen, jeweils öffnen und
+   den Download-Button anklicken, um die Dateien tatsächlich zu installieren
+5. Home Assistant neu starten
+6. **Einstellungen → Geräte & Dienste → Integration hinzufügen** →
    "Irrigation Sequencer" suchen
-5. Im Einrichtungsdialog 1 bis 10 Ventil-/Steckdosen-Entitäten auswählen
+7. Im Einrichtungsdialog 1 bis 10 Ventil-/Steckdosen-Entitäten auswählen
+
+> **Falls nur eine Kategorie erscheint bzw. erneutes Hinzufügen keine
+> zweite Zeile erzeugt**: den bestehenden Eintrag zuerst entfernen
+> (Papierkorb-Symbol), dann die URL frisch mit der fehlenden Kategorie neu
+> hinzufügen. Die Konfiguration/gespeicherten Einstellungen der Integration
+> werden durch das Hinzufügen/Entfernen des HACS-*Tracking*-Eintrags nicht
+> beeinflusst – nur durch ein tatsächliches Deinstallieren der Integration
+> selbst.
 
 ## Manuelle Installation
 
@@ -86,7 +106,7 @@ Hauptanwendungsfall ist.
    Verzeichnis kopieren
 2. Datei `irrigation-sequencer-card.js` nach `config/www/` kopieren
 3. Unter **Einstellungen → Dashboards → Ressourcen** die Datei
-   `/local/irrigation-sequencer-card.js?v=1.1.3` als JavaScript-Modul
+   `/local/irrigation-sequencer-card.js?v=1.1.4` als JavaScript-Modul
    hinzufügen (der `?v=...`-Teil ist wichtig - siehe Hinweis unten)
 4. Home Assistant neu starten und die Integration wie oben beschrieben einrichten
 
