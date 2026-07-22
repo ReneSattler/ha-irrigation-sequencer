@@ -103,6 +103,16 @@ and no Lovelace resource to add by hand, on either install path.
 > the mobile app) that was already open before you installed/updated the
 > integration. Fully close and reopen the tab or app (a simple in-app
 > reload/refresh isn't always enough), then try adding the card again.
+>
+> **Cards show "Configuration error" or vanish after adding/removing a
+> zone?** Same cause, same fix: fully close and reopen the tab/app. Adding a
+> zone reloads the integration's config entry, and a tab that was open
+> beforehand can end up rendering against a stale mix of old and new state
+> for a moment. If closing and reopening doesn't fix it, open the browser
+> console (F12) and filter for "irrigation" - if nothing shows up there, the
+> error is coming from a different custom card, not this one (with many
+> HACS cards installed, an unrelated console error is easy to mistake for
+> this integration's).
 
 After setting up the integration, add two new Lovelace cards and choose
 `Irrigation Sequencer - Status` and `Irrigation Sequencer - Settings`. In the

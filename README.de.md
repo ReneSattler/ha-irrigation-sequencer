@@ -115,6 +115,17 @@ manuelle Lovelace-Ressource nötig.
 > installiert/aktualisiert hast, bekommt es nicht mit. Tab bzw. App
 > komplett schließen und neu öffnen (ein einfaches Neuladen reicht nicht
 > immer), dann erneut versuchen, die Karte hinzuzufügen.
+>
+> **Cards zeigen "Konfigurationsfehler" oder verschwinden, nachdem du eine
+> Zone hinzugefügt/entfernt hast?** Gleiche Ursache, gleicher Fix: Tab/App
+> komplett schließen und neu öffnen. Das Hinzufügen einer Zone lädt den
+> Konfigurationseintrag der Integration neu, und ein Tab, der vorher schon
+> offen war, kann kurzzeitig mit einem veralteten Mix aus altem und neuem
+> Zustand rendern. Falls Schließen/Neuöffnen nicht hilft: Browser-Konsole
+> (F12) öffnen und nach "irrigation" filtern - taucht dort nichts auf, kommt
+> der Fehler von einer anderen Custom Card, nicht von dieser Integration
+> (bei vielen installierten HACS-Cards wird ein unabhängiger Konsolenfehler
+> leicht fälschlich dieser Integration zugeschrieben).
 
 Nach der Einrichtung der Integration zwei neue Lovelace-Karten hinzufügen und
 `Irrigation Sequencer - Status` bzw. `Irrigation Sequencer - Settings`
