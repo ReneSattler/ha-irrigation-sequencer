@@ -1,6 +1,5 @@
 {
   "name": "Irrigation Sequencer",
   "render_readme": true,
-  "filename": "irrigation-sequencer-card.js",
-  "homeassistant": "2024.1.0"
+  "homeassistant": "2024.7.0"
 }

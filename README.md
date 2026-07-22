@@ -64,53 +64,30 @@ for experimenting even though it isn't the primary use case.
 
 ## Installation via HACS
 
-This repository provides **two separate things** - the backend integration
-(installs to `custom_components/`) and the Lovelace cards (installs to
-`www/community/`). HACS appears to only allow **one category per repository
-URL** as a custom repository at a time (adding the same URL a second time
-with a different type is rejected with *"Repository ... exists in the
-store"*), so tracking both parts through HACS at once isn't practical.
-Instead:
+This is a single HACS entry, category **Integration**. The cards are bundled
+inside the integration and register themselves automatically on startup -
+no separate "Dashboard" repository entry, no manual Lovelace resource, and
+no cache-busting query strings to babysit. Updating the one HACS entry
+updates both the backend and the cards together.
 
-- **Cards → via HACS.** HACS → three-dot menu (top right) → **Custom
-  repositories** → add `https://github.com/ReneSattler/ha-irrigation-sequencer`
-  with type **Dashboard** (this is what HACS currently calls what used to
-  be labelled "Plugin (Frontend)") → **Add**, then find it under HACS's
-  Dashboard/Frontend list and click download. This is what gives you
-  update notifications for the cards going forward.
-- **Backend integration → copy manually, once.** Download the
-  [latest release](https://github.com/ReneSattler/ha-irrigation-sequencer/releases/latest)
-  (or clone the repo) and copy the `custom_components/irrigation_sequencer`
-  folder into your `config/custom_components/` folder (e.g. via the File
-  editor/Studio Code Server add-on, Samba, or SSH). This changes rarely, so
-  a manual copy on install/upgrade is a small price for skipping the whole
-  HACS category dance entirely.
-
-After both are in place, restart Home Assistant, then:
-
-1. **Settings → Devices & Services → Add Integration** → search for
+1. HACS → three-dot menu (top right) → **Custom repositories**
+2. Add `https://github.com/ReneSattler/ha-irrigation-sequencer`, type
+   **Integration** → **Add**, then find "Irrigation Sequencer" under HACS's
+   Integrations list and click the download button
+3. Restart Home Assistant
+4. **Settings → Devices & Services → Add Integration** → search for
    "Irrigation Sequencer" and set it up (select 1 to 10 valve/plug entities)
-2. Add the cards to a dashboard (see "Setting up the cards" below)
+5. Add the cards to a dashboard (see "Setting up the cards" below) - they're
+   already available, no further setup needed
 
 ## Manual installation
 
 1. Copy the `custom_components/irrigation_sequencer` folder into your
    `config/custom_components/` directory
-2. Copy `irrigation-sequencer-card.js` into `config/www/`
-3. Under **Settings → Dashboards → Resources**, add
-   `/local/irrigation-sequencer-card.js?v=1.1.7` as a JavaScript module (the
-   `?v=...` part matters - see note below)
-4. Restart Home Assistant and set up the integration as described above
+2. Restart Home Assistant and set up the integration as described above
 
-> **Updating a manual install**: browsers (especially on mobile) can cache
-> the plain `.js` resource indefinitely, silently serving an old version
-> after you copy in an update - with no visible sign anything is stale.
-> Bump the `?v=...` query string in the resource URL (Settings → Dashboards
-> → Resources → edit) to match the new version every time you update the
-> file manually, so browsers are forced to fetch the new copy. You can
-> double check which version actually loaded by opening the browser
-> console (F12) - the card logs its version on load. HACS installs handle
-> this automatically and don't need this step.
+The cards register themselves the same way as with HACS - no `www/` copy
+and no Lovelace resource to add by hand, on either install path.
 
 ## Setting up the cards
 
