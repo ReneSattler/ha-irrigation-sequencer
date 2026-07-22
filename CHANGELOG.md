@@ -5,6 +5,16 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.1.7] - 2026-07-22
+
+- Documentation only: reverted 1.1.6's "add as Integration, download,
+  remove the HACS entry, re-add as Dashboard" fresh-install dance - user
+  feedback confirmed this is impractical for a first-time setup. Back to
+  the 1.1.5 recommendation as the primary path: Dashboard via HACS for the
+  cards (gives update tracking), plus a one-time manual copy of
+  `custom_components/irrigation_sequencer` for the backend (which changes
+  rarely). Removes the swap-categories workflow from the docs entirely.
+
 ## [1.1.6] - 2026-07-22
 
 - Documentation only: added explicit steps for a completely fresh install

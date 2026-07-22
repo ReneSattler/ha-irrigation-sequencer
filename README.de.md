@@ -72,45 +72,34 @@ Hauptanwendungsfall ist.
 
 Dieses Repository liefert **zwei getrennte Dinge** – die Backend-Integration
 (landet in `custom_components/`) und die Lovelace-Cards (landet in
-`www/community/`) – normalerweise als zwei unabhängige
-HACS-"Benutzerdefiniertes Repository"-Einträge (dieselbe URL, andere
-Kategorie). In der Praxis lässt HACS aber offenbar **nur eine Kategorie pro
-Repository-URL gleichzeitig** als benutzerdefiniertes Repository zu:
-dieselbe URL ein zweites Mal mit anderem Typ hinzuzufügen wird mit
-*"Repository ... existiert bereits im Store"* abgelehnt. Den
-benutzerdefinierten Repository-Eintrag zu entfernen (Papierkorb-Symbol)
-stoppt nur das Update-Tracking von HACS – **löscht keine** bereits
-heruntergeladenen Dateien, du kannst die Kategorie also gefahrlos
-hin- und herschalten.
+`www/community/`). HACS lässt offenbar **nur eine Kategorie pro
+Repository-URL gleichzeitig** als benutzerdefiniertes Repository zu
+(dieselbe URL ein zweites Mal mit anderem Typ hinzuzufügen wird mit
+*"Repository ... existiert bereits im Store"* abgelehnt) – beide Teile
+gleichzeitig über HACS zu tracken ist also nicht praktikabel. Stattdessen:
 
-**Bei einer komplett neuen Installation** (noch nichts vorhanden), beide
-Teile nacheinander einrichten:
+- **Cards → über HACS.** HACS → oben rechts auf die drei Punkte →
+  **Benutzerdefinierte Repositories** → hinzufügen:
+  `https://github.com/ReneSattler/ha-irrigation-sequencer`, Typ
+  **Dashboard** (so heißt in der aktuellen HACS-Version das, was früher
+  "Plugin (Frontend)" hieß) → **Hinzufügen**, dann in der
+  HACS-Dashboard/Frontend-Liste suchen und herunterladen. Damit bekommst du
+  künftig Update-Hinweise für die Cards.
+- **Backend-Integration → einmalig manuell kopieren.** Das
+  [neueste Release](https://github.com/ReneSattler/ha-irrigation-sequencer/releases/latest)
+  herunterladen (oder das Repo klonen) und den Ordner
+  `custom_components/irrigation_sequencer` in deinen
+  `config/custom_components/`-Ordner kopieren (z. B. über das
+  File-editor-/Studio-Code-Server-Add-on, Samba oder SSH). Das ändert sich
+  selten – ein manuelles Kopieren bei Installation/Update ist ein kleiner
+  Preis dafür, sich die ganze HACS-Kategorie-Tauscherei zu sparen.
 
-1. HACS → oben rechts auf die drei Punkte → **Benutzerdefinierte
-   Repositories**
-2. Repository-URL hinzufügen: `https://github.com/ReneSattler/ha-irrigation-sequencer`,
-   Typ **Integration** → **Hinzufügen**, dann in der HACS-Integrationen-Liste
-   suchen und den Download-Button anklicken (das Hinzufügen als
-   benutzerdefiniertes Repository allein installiert noch nichts)
-3. Home Assistant neu starten, dann **Einstellungen → Geräte & Dienste →
-   Integration hinzufügen** → "Irrigation Sequencer" suchen und einrichten
-   (1 bis 10 Ventil-/Steckdosen-Entitäten auswählen)
-4. Zurück bei **Benutzerdefinierte Repositories**: den gerade hinzugefügten
-   Eintrag entfernen (Papierkorb) – das stoppt nur das Update-Tracking, die
-   gerade installierten Integrationsdateien bleiben unangetastet
-5. Dieselbe URL erneut hinzufügen, diesmal mit Typ **Dashboard** (so heißt
-   in der aktuellen HACS-Version das, was früher "Plugin (Frontend)" hieß –
-   im Typ-Dropdown danach suchen, es gibt keine separate "Plugin"-Option
-   mehr) → **Hinzufügen**, dann in der HACS-Dashboard/Frontend-Liste suchen
-   und herunterladen
-6. Home Assistant erneut neu starten und die Cards einrichten (siehe
-   "Cards einrichten" unten)
+Nachdem beides vorhanden ist, Home Assistant neu starten, dann:
 
-**Falls die Backend-Integration schon installiert ist** (z. B. weil du sie
-manuell eingerichtet hast, oder du aktualisierst nur ein bestehendes
-Setup) und du nur die Cards brauchst: direkt zu Schritt 5 springen – das
-Repository nur mit Typ **Dashboard** hinzufügen, die Integration-Kategorie
-brauchst du dann gar nicht anzufassen.
+1. **Einstellungen → Geräte & Dienste → Integration hinzufügen** →
+   "Irrigation Sequencer" suchen und einrichten (1 bis 10
+   Ventil-/Steckdosen-Entitäten auswählen)
+2. Die Cards zu einem Dashboard hinzufügen (siehe "Cards einrichten" unten)
 
 ## Manuelle Installation
 
@@ -118,7 +107,7 @@ brauchst du dann gar nicht anzufassen.
    Verzeichnis kopieren
 2. Datei `irrigation-sequencer-card.js` nach `config/www/` kopieren
 3. Unter **Einstellungen → Dashboards → Ressourcen** die Datei
-   `/local/irrigation-sequencer-card.js?v=1.1.6` als JavaScript-Modul
+   `/local/irrigation-sequencer-card.js?v=1.1.7` als JavaScript-Modul
    hinzufügen (der `?v=...`-Teil ist wichtig - siehe Hinweis unten)
 4. Home Assistant neu starten und die Integration wie oben beschrieben einrichten
 
