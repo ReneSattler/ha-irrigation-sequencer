@@ -5,6 +5,15 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.2.3] - 2026-07-22
+
+- Documentation only: added a note to use "Restart Home Assistant", not
+  "Quick Reload", after installing/updating - Quick Reload only reloads
+  YAML config, not custom integration Python code, so it silently keeps
+  running the old version with no error. Confirmed live: a user updated to
+  v1.2.2 but the integration still showed v1.2.0 and the bug persisted
+  until a real restart.
+
 ## [1.2.2] - 2026-07-22
 
 - Fixed: "Configure" on the integration (used to add/remove zones after

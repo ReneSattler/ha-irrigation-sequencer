@@ -74,7 +74,13 @@ updates both the backend and the cards together.
 2. Add `https://github.com/ReneSattler/ha-irrigation-sequencer`, type
    **Integration** → **Add**, then find "Irrigation Sequencer" under HACS's
    Integrations list and click the download button
-3. Restart Home Assistant
+3. Restart Home Assistant - **use "Restart Home Assistant"** (Settings →
+   System → **Restart** → "Restart Home Assistant"), not "Quick Reload".
+   Quick Reload only reloads YAML config, not custom integration Python
+   code, so after an update it would keep running the old version without
+   any error or warning - the version shown under Settings → Devices &
+   Services → Irrigation Sequencer wouldn't match what HACS says it
+   installed. If that ever happens, do a real restart and it resolves.
 4. **Settings → Devices & Services → Add Integration** → search for
    "Irrigation Sequencer" and set it up (select 1 to 10 valve/plug entities)
 5. Add the cards to a dashboard (see "Setting up the cards" below) - they're
@@ -84,7 +90,8 @@ updates both the backend and the cards together.
 
 1. Copy the `custom_components/irrigation_sequencer` folder into your
    `config/custom_components/` directory
-2. Restart Home Assistant and set up the integration as described above
+2. Restart Home Assistant (see the "Restart" vs "Quick Reload" note above)
+   and set up the integration as described above
 
 The cards register themselves the same way as with HACS - no `www/` copy
 and no Lovelace resource to add by hand, on either install path.
