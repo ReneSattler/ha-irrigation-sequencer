@@ -5,6 +5,18 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.1.4] - 2026-07-22
+
+- Documentation only: clarified the HACS installation instructions after
+  working through this live with a user - this repo provides both an
+  integration and a Lovelace plugin and needs to be added to HACS
+  **twice** (same URL, once per category), and the frontend category is
+  currently labelled **"Dashboard"** in HACS's UI, not "Plugin" - a
+  common point of confusion that looked like a broken installation
+  (Konfigurationsfehler) but was actually just the wrong/missing
+  category. Added troubleshooting notes for when re-adding a URL doesn't
+  create a second tracked entry.
+
 ## [1.1.3] - 2026-07-22
 
 - **Fixed HACS not being able to properly discover/install the frontend
