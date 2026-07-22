@@ -5,6 +5,14 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.2.1] - 2026-07-22
+
+- Documentation only: added a note that a browser tab (or the mobile app)
+  already open before installing/updating won't pick up the self-hosted
+  card until fully closed and reopened - the injected `<script>` tag is
+  only added on a fresh full page load. Confirmed live: a user couldn't
+  find the cards in the picker until closing and reopening the browser.
+
 ## [1.2.0] - 2026-07-22
 
 - The integration now self-hosts the Lovelace card and registers it

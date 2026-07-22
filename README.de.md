@@ -101,6 +101,13 @@ manuelle Lovelace-Ressource nötig.
 
 ## Cards einrichten
 
+> **Findest du die Cards nicht in der Auswahl?** Das Card-Skript wird nur
+> beim vollständigen Laden der Startseite eingebunden - ein Browser-Tab
+> (oder die Handy-App), der schon offen war, bevor du die Integration
+> installiert/aktualisiert hast, bekommt es nicht mit. Tab bzw. App
+> komplett schließen und neu öffnen (ein einfaches Neuladen reicht nicht
+> immer), dann erneut versuchen, die Karte hinzuzufügen.
+
 Nach der Einrichtung der Integration zwei neue Lovelace-Karten hinzufügen und
 `Irrigation Sequencer - Status` bzw. `Irrigation Sequencer - Settings`
 auswählen. Im visuellen Editor jeweils die Status-Sensor-Entität
