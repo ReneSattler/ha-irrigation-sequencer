@@ -5,6 +5,16 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.2.6] - 2026-07-22
+
+- Documentation only: explained that a "Configuration error" right after
+  an update, if closing/reopening the tab doesn't fix it, is Home
+  Assistant's own frontend service worker (PWA app-shell caching) - not
+  something this integration can control - and added the concrete steps
+  to clear the browser/app cache as the resolution. Verified the served
+  card file itself isn't the cause: no aggressive cache headers, and the
+  URL's `?v=...` query string already changes every release.
+
 ## [1.2.5] - 2026-07-22
 
 - Fixed: changing a zone's duration (or name) didn't live-update the status

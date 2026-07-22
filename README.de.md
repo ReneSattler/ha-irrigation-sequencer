@@ -109,12 +109,20 @@ manuelle Lovelace-Ressource nötig.
 
 ## Cards einrichten
 
-> **Findest du die Cards nicht in der Auswahl?** Das Card-Skript wird nur
-> beim vollständigen Laden der Startseite eingebunden - ein Browser-Tab
+> **Findest du die Cards nicht in der Auswahl, oder zeigt das Dashboard
+> direkt nach einem Update "Konfigurationsfehler"?** Das Card-Skript wird
+> nur beim vollständigen Laden der Startseite eingebunden - ein Browser-Tab
 > (oder die Handy-App), der schon offen war, bevor du die Integration
-> installiert/aktualisiert hast, bekommt es nicht mit. Tab bzw. App
+> installiert/aktualisiert hast, bekommt es nicht mit. Erst Tab/App
 > komplett schließen und neu öffnen (ein einfaches Neuladen reicht nicht
-> immer), dann erneut versuchen, die Karte hinzuzufügen.
+> immer). Hilft das allein nicht: Die Home-Assistant-Frontend-App ist eine
+> PWA mit eigenem Service Worker, der die App-Hülle unabhängig davon
+> cached, was diese Integration ausliefert - das ist ein Verhalten von
+> Home-Assistant-Core selbst, das eine Custom Integration weder steuern
+> noch umgehen kann. Browser-Cache für deine Home-Assistant-URL löschen
+> (Desktop: DevTools → Anwendung/Speicher → "Websitedaten löschen", oder
+> einfach Browserdaten für die Seite löschen; Handy-App: Cache/Speicher der
+> App in den Telefon-Einstellungen leeren), dann neu öffnen.
 >
 > **Cards zeigen "Konfigurationsfehler" oder verschwinden, nachdem du eine
 > Zone hinzugefügt/entfernt hast?** Gleiche Ursache, gleicher Fix: Tab/App
