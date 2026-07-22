@@ -61,6 +61,36 @@ async def test_set_zone_name_strips_whitespace(hass: HomeAssistant) -> None:
     assert manager.zones[0]["name"] == "Front lawn"
 
 
+async def test_set_zone_duration_does_not_mutate_previously_returned_zones(
+    hass: HomeAssistant,
+) -> None:
+    """Regression test: extra_state_attributes hands out manager.zones by
+    reference on every state write. If a change mutated the existing
+    list/dicts in place instead of producing new ones, a reference captured
+    before the change (as HA's previous State object holds) would show the
+    new value too, making the "zones" attribute look unchanged to HA's
+    state-diffing - the status card's timeline silently never updated."""
+    manager = make_manager(hass)
+    zones_before = manager.zones
+    zone_before = manager.zones[0]
+    await manager.async_set_zone_duration("switch.zone_1", 15)
+    assert zones_before[0]["duration_minutes"] != 15
+    assert zone_before["duration_minutes"] != 15
+    assert manager.zones[0]["duration_minutes"] == 15
+
+
+async def test_set_zone_name_does_not_mutate_previously_returned_zones(
+    hass: HomeAssistant,
+) -> None:
+    manager = make_manager(hass)
+    zones_before = manager.zones
+    zone_before = manager.zones[0]
+    await manager.async_set_zone_name("switch.zone_1", "Front lawn")
+    assert zones_before[0]["name"] != "Front lawn"
+    assert zone_before["name"] != "Front lawn"
+    assert manager.zones[0]["name"] == "Front lawn"
+
+
 # --------------------------------------------------------------------- #
 # Pause between zones
 # --------------------------------------------------------------------- #

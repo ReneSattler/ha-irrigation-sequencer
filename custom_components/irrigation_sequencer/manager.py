@@ -171,28 +171,43 @@ class IrrigationSequencerManager:
             zone = zones_by_id.get(entity_id)
             if zone is None:
                 continue
-            zone["position"] = position
-            new_zones.append(zone)
+            new_zones.append({**zone, "position": position})
         if len(new_zones) == len(self.zones):
             self.zones = new_zones
             await self._async_save()
             self._notify_listeners()
 
     async def async_set_zone_duration(self, entity_id: str, minutes: int) -> None:
-        for zone in self.zones:
-            if zone["entity_id"] == entity_id:
-                zone["duration_minutes"] = max(1, int(minutes))
-                await self._async_save()
-                self._notify_listeners()
-                return
+        if not any(z["entity_id"] == entity_id for z in self.zones):
+            return
+        clamped = max(1, int(minutes))
+        # Build a new list/dicts rather than mutating the existing zone dict
+        # in place: extra_state_attributes hands this same list out by
+        # reference on every state write, so an in-place edit left HA's
+        # state-diffing unable to tell the "zones" attribute had changed at
+        # all (old and new state ended up pointing at the identical,
+        # already-mutated object) - the browser's status card timeline
+        # silently never picked up a duration change unless something else
+        # happened to change too. Scalar attributes like
+        # pause_between_zones_seconds don't have this problem since
+        # reassigning an int is inherently a fresh value.
+        self.zones = [
+            {**z, "duration_minutes": clamped} if z["entity_id"] == entity_id else z
+            for z in self.zones
+        ]
+        await self._async_save()
+        self._notify_listeners()
 
     async def async_set_zone_name(self, entity_id: str, name: str) -> None:
-        for zone in self.zones:
-            if zone["entity_id"] == entity_id:
-                zone["name"] = name.strip()
-                await self._async_save()
-                self._notify_listeners()
-                return
+        if not any(z["entity_id"] == entity_id for z in self.zones):
+            return
+        stripped = name.strip()
+        self.zones = [
+            {**z, "name": stripped} if z["entity_id"] == entity_id else z
+            for z in self.zones
+        ]
+        await self._async_save()
+        self._notify_listeners()
 
     async def async_set_pause_between_zones(self, seconds: int) -> None:
         self.pause_between_zones_seconds = max(0, int(seconds))
