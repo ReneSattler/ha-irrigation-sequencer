@@ -5,6 +5,16 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.2.2] - 2026-07-22
+
+- Fixed: "Configure" on the integration (used to add/remove zones after
+  initial setup) crashed with a 500 error on current Home Assistant core.
+  `IrrigationSequencerOptionsFlow.__init__` manually assigned
+  `self.config_entry` - the long-standing pattern, but HA core deprecated
+  it in favor of an auto-populated property and current versions now raise
+  instead of just warning. Caught live by a user trying to add a second
+  zone. Added a regression test.
+
 ## [1.2.1] - 2026-07-22
 
 - Documentation only: added a note that a browser tab (or the mobile app)

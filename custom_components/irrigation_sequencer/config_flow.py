@@ -70,14 +70,15 @@ class IrrigationSequencerConfigFlow(ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> "IrrigationSequencerOptionsFlow":
-        return IrrigationSequencerOptionsFlow(config_entry)
+        return IrrigationSequencerOptionsFlow()
 
 
 class IrrigationSequencerOptionsFlow(OptionsFlow):
-    """Lets the user change the zone entities after the initial setup."""
+    """Lets the user change the zone entities after the initial setup.
 
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        self.config_entry = config_entry
+    Does not store config_entry itself - recent HA core versions provide it
+    as a property automatically; assigning it manually in __init__ (the old
+    pattern) now raises an error instead of just a deprecation warning."""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> Any:
         errors: dict[str, str] = {}
