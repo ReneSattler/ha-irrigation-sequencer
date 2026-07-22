@@ -91,6 +91,12 @@ and no Lovelace resource to add by hand, on either install path.
 
 ## Setting up the cards
 
+> **Can't find the cards in the picker?** The card script is only injected
+> into the frontend on a full page load, not picked up by a browser tab (or
+> the mobile app) that was already open before you installed/updated the
+> integration. Fully close and reopen the tab or app (a simple in-app
+> reload/refresh isn't always enough), then try adding the card again.
+
 After setting up the integration, add two new Lovelace cards and choose
 `Irrigation Sequencer - Status` and `Irrigation Sequencer - Settings`. In the
 visual editor of each, select the status sensor entity
