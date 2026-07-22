@@ -78,10 +78,9 @@ for experimenting even though it isn't the primary use case.
 
 1. Copy the `custom_components/irrigation_sequencer` folder into your
    `config/custom_components/` directory
-2. Copy `irrigation-sequencer-card/irrigation-sequencer-card.js` into
-   `config/www/`
+2. Copy `irrigation-sequencer-card.js` into `config/www/`
 3. Under **Settings → Dashboards → Resources**, add
-   `/local/irrigation-sequencer-card.js?v=1.1.2` as a JavaScript module (the
+   `/local/irrigation-sequencer-card.js?v=1.1.3` as a JavaScript module (the
    `?v=...` part matters - see note below)
 4. Restart Home Assistant and set up the integration as described above
 
