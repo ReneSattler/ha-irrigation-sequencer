@@ -5,6 +5,24 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.2.8] - 2026-07-23
+
+- Fixed: after every release, the dashboard showed "Custom element doesn't
+  exist" for both cards until the browser's (or the Companion App's)
+  cache was manually cleared - simply closing and reopening the
+  browser/app, even InPrivate, wasn't enough. Root cause:
+  `frontend.add_extra_js_url()` (used since v1.2.0) bakes the card's
+  `<script>` reference directly into the server-rendered `/` index page,
+  and Home Assistant's own frontend service worker can cache that page
+  shell independently of what this integration serves - not something a
+  custom integration can control. Switched to registering a Lovelace
+  resource entry instead: resources are fetched dynamically over the
+  websocket connection on every dashboard load rather than baked into a
+  cacheable page, the same mechanism every other HACS frontend card uses.
+  The resource entry is created on first setup and updated in place (not
+  duplicated) whenever the version changes - still fully automatic, no
+  manual resource management needed. Added regression tests.
+
 ## [1.2.7] - 2026-07-22
 
 - Hardening: the self-hosted card file is now served through a small

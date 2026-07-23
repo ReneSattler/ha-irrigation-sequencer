@@ -99,30 +99,30 @@ and no Lovelace resource to add by hand, on either install path.
 ## Setting up the cards
 
 > **Can't find the cards in the picker, or dashboard shows a "Configuration
-> error" right after updating?** The card script is only injected into the
-> frontend on a full page load, not picked up by a browser tab (or the
-> mobile app) that was already open before you installed/updated the
-> integration. Fully close and reopen the tab or app first (a simple
-> in-app reload/refresh isn't always enough). If that alone doesn't fix it,
-> Home Assistant's frontend is a PWA with its own service worker that
-> caches the app shell independently of what this integration serves -
-> that's Home Assistant core behavior, not something a custom integration
-> can control or bypass (the card's own file is already served with
-> `Cache-Control: no-store` and a version-tagged URL, so it isn't the
-> cause). Clear the browser's cache for your Home Assistant
-> URL (desktop: DevTools → Application/Storage → "Clear site data", or
-> just clear browsing data for the site; mobile app: clear the app's
-> cache/storage in your phone's app settings), then reopen.
+> error" right after updating?** Since v1.2.8 the card is registered as a
+> proper Lovelace resource (created/updated automatically, no manual setup)
+> instead of being injected into the page shell - resources are fetched
+> fresh on every dashboard load, so this shouldn't require any cache
+> clearing anymore. If you still hit it (e.g. right after upgrading *to*
+> v1.2.8 for the first time, since the old injected reference can itself be
+> part of a cached page shell), fully close and reopen the tab or app; if
+> that alone doesn't fix it, Home Assistant's frontend is a PWA with its
+> own service worker that caches the app shell independently of what this
+> integration serves - that's Home Assistant core behavior, not something a
+> custom integration can control - so clear the browser's cache for your
+> Home Assistant URL (desktop: DevTools → Application/Storage → "Clear site
+> data", or just clear browsing data for the site; mobile app: clear the
+> app's cache/storage in your phone's app settings), then reopen. From then
+> on, updates shouldn't need this again.
 >
 > **Cards show "Configuration error" or vanish after adding/removing a
-> zone?** Same cause, same fix: fully close and reopen the tab/app. Adding a
-> zone reloads the integration's config entry, and a tab that was open
-> beforehand can end up rendering against a stale mix of old and new state
-> for a moment. If closing and reopening doesn't fix it, open the browser
-> console (F12) and filter for "irrigation" - if nothing shows up there, the
-> error is coming from a different custom card, not this one (with many
-> HACS cards installed, an unrelated console error is easy to mistake for
-> this integration's).
+> zone?** Adding a zone reloads the integration's config entry, and a tab
+> that was open beforehand can briefly render against a stale mix of old
+> and new state - closing and reopening the tab/app resolves it. If that
+> doesn't fix it, open the browser console (F12) and filter for
+> "irrigation" - if nothing shows up there, the error is coming from a
+> different custom card, not this one (with many HACS cards installed, an
+> unrelated console error is easy to mistake for this integration's).
 
 After setting up the integration, add two new Lovelace cards and choose
 `Irrigation Sequencer - Status` and `Irrigation Sequencer - Settings`. In the

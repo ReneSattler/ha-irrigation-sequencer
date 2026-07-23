@@ -8,8 +8,9 @@ from pathlib import Path
 import voluptuous as vol
 from aiohttp import web
 
-from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import HomeAssistantView
+from homeassistant.components.lovelace.const import LOVELACE_DATA
+from homeassistant.components.lovelace.resources import ResourceStorageCollection
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
@@ -135,6 +136,49 @@ class _CardFileView(HomeAssistantView):
         )
 
 
+async def _async_ensure_lovelace_resource(hass: HomeAssistant, version: str) -> None:
+    """Register (or update, on a version change) a Lovelace resource entry
+    for the card, instead of the frontend.add_extra_js_url() helper this
+    used before v1.2.8.
+
+    add_extra_js_url() bakes the <script> reference directly into the
+    server-rendered index page. A stale cached copy of that page (Home
+    Assistant's frontend is a PWA with its own service worker, which a
+    custom integration can't control) kept serving without the new
+    reference after every single update, requiring the user to manually
+    clear their browser/app cache each time - not something we could fix
+    while using that mechanism.
+
+    A Lovelace resource, by contrast, is stored server-side and the URL
+    list is fetched dynamically over the websocket connection on every
+    dashboard load rather than baked into any static, cacheable page -
+    the same delivery mechanism every other HACS frontend card relies on,
+    which doesn't have this staleness problem. Skips silently if this
+    instance manages resources via YAML (resource_mode: yaml in
+    configuration.yaml) - that collection is read-only from here, and a
+    user in that mode is already managing resources by hand.
+    """
+    lovelace_data = hass.data.get(LOVELACE_DATA)
+    if lovelace_data is None or not isinstance(
+        lovelace_data.resources, ResourceStorageCollection
+    ):
+        return
+
+    resources = lovelace_data.resources
+    await resources.async_get_info()  # ensures the collection is loaded
+
+    base_url = f"{FRONTEND_URL_BASE}/{CARD_FILENAME}"
+    new_url = f"{base_url}?v={version}"
+    existing = next(
+        (item for item in resources.async_items() if item["url"].startswith(base_url)),
+        None,
+    )
+    if existing is None:
+        await resources.async_create_item({"res_type": "module", "url": new_url})
+    elif existing["url"] != new_url:
+        await resources.async_update_item(existing["id"], {"url": new_url})
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Self-host the Lovelace card so it loads automatically - no separate
     HACS "Dashboard" download or manual resource registration needed."""
@@ -142,7 +186,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     card_path = Path(integration.file_path) / "frontend" / CARD_FILENAME
     content = await hass.async_add_executor_job(card_path.read_bytes)
     hass.http.register_view(_CardFileView(content))
-    add_extra_js_url(hass, f"{FRONTEND_URL_BASE}/{CARD_FILENAME}?v={integration.version}")
+    await _async_ensure_lovelace_resource(hass, integration.version)
     return True
 
 
