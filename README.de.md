@@ -110,32 +110,34 @@ manuelle Lovelace-Ressource nötig.
 ## Cards einrichten
 
 > **Findest du die Cards nicht in der Auswahl, oder zeigt das Dashboard
-> direkt nach einem Update "Konfigurationsfehler"?** Das Card-Skript wird
-> nur beim vollständigen Laden der Startseite eingebunden - ein Browser-Tab
-> (oder die Handy-App), der schon offen war, bevor du die Integration
-> installiert/aktualisiert hast, bekommt es nicht mit. Erst Tab/App
-> komplett schließen und neu öffnen (ein einfaches Neuladen reicht nicht
-> immer). Hilft das allein nicht: Die Home-Assistant-Frontend-App ist eine
-> PWA mit eigenem Service Worker, der die App-Hülle unabhängig davon
-> cached, was diese Integration ausliefert - das ist ein Verhalten von
-> Home-Assistant-Core selbst, das eine Custom Integration weder steuern
-> noch umgehen kann (die Card-Datei selbst wird bereits mit
-> `Cache-Control: no-store` und einer versionierten URL ausgeliefert, liegt
-> also nicht daran). Browser-Cache für deine Home-Assistant-URL löschen
-> (Desktop: DevTools → Anwendung/Speicher → "Websitedaten löschen", oder
-> einfach Browserdaten für die Seite löschen; Handy-App: Cache/Speicher der
-> App in den Telefon-Einstellungen leeren), dann neu öffnen.
+> direkt nach einem Update "Konfigurationsfehler"?** Seit v1.2.8 wird die
+> Card als richtige Lovelace-Ressource registriert (automatisch
+> erstellt/aktualisiert, kein manueller Schritt nötig) statt in die
+> Seiten-Hülle eingebettet zu werden - Ressourcen werden bei jedem
+> Dashboard-Laden frisch abgerufen, das sollte also kein Cache-Löschen mehr
+> erfordern. Falls es dich trotzdem einmal trifft (z. B. direkt beim ersten
+> Update *auf* v1.2.8, weil die alte eingebettete Referenz selbst Teil einer
+> gecachten Seiten-Hülle sein kann): erst Tab/App komplett schließen und neu
+> öffnen; hilft das nicht, ist die Home-Assistant-Frontend-App eine PWA mit
+> eigenem Service Worker, der die App-Hülle unabhängig davon cached, was
+> diese Integration ausliefert - das ist Home-Assistant-Core-Verhalten, das
+> eine Custom Integration nicht steuern kann - also Browser-Cache für deine
+> Home-Assistant-URL löschen (Desktop: DevTools → Anwendung/Speicher →
+> "Websitedaten löschen", oder einfach Browserdaten für die Seite löschen;
+> Handy-App: Cache/Speicher der App in den Telefon-Einstellungen leeren),
+> dann neu öffnen. Ab dann sollte das bei künftigen Updates nicht mehr
+> nötig sein.
 >
 > **Cards zeigen "Konfigurationsfehler" oder verschwinden, nachdem du eine
-> Zone hinzugefügt/entfernt hast?** Gleiche Ursache, gleicher Fix: Tab/App
-> komplett schließen und neu öffnen. Das Hinzufügen einer Zone lädt den
+> Zone hinzugefügt/entfernt hast?** Das Hinzufügen einer Zone lädt den
 > Konfigurationseintrag der Integration neu, und ein Tab, der vorher schon
 > offen war, kann kurzzeitig mit einem veralteten Mix aus altem und neuem
-> Zustand rendern. Falls Schließen/Neuöffnen nicht hilft: Browser-Konsole
-> (F12) öffnen und nach "irrigation" filtern - taucht dort nichts auf, kommt
-> der Fehler von einer anderen Custom Card, nicht von dieser Integration
-> (bei vielen installierten HACS-Cards wird ein unabhängiger Konsolenfehler
-> leicht fälschlich dieser Integration zugeschrieben).
+> Zustand rendern - Tab/App schließen und neu öffnen behebt das. Hilft das
+> nicht: Browser-Konsole (F12) öffnen und nach "irrigation" filtern -
+> taucht dort nichts auf, kommt der Fehler von einer anderen Custom Card,
+> nicht von dieser Integration (bei vielen installierten HACS-Cards wird
+> ein unabhängiger Konsolenfehler leicht fälschlich dieser Integration
+> zugeschrieben).
 
 Nach der Einrichtung der Integration zwei neue Lovelace-Karten hinzufügen und
 `Irrigation Sequencer - Status` bzw. `Irrigation Sequencer - Settings`
