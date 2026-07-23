@@ -6,9 +6,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import voluptuous as vol
+from aiohttp import web
 
 from homeassistant.components.frontend import add_extra_js_url
-from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.http import HomeAssistantView
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
@@ -109,14 +110,38 @@ FRONTEND_URL_BASE = f"/{DOMAIN}_files"
 CARD_FILENAME = "irrigation-sequencer-card.js"
 
 
+class _CardFileView(HomeAssistantView):
+    """Serves the self-hosted card with an explicit no-store Cache-Control
+    header - HA's built-in static-path helper only offers a choice between
+    a 1-month "public, max-age=..." header or no Cache-Control header at
+    all (the latter leaves browsers free to heuristically cache the
+    response based on its Last-Modified date). The resource URL already
+    carries a `?v=<integration version>` query string that changes on
+    every release, so a stale cached copy of an old version's URL was
+    never actually a problem - this exists purely as defense in depth."""
+
+    url = f"{FRONTEND_URL_BASE}/{CARD_FILENAME}"
+    name = f"{DOMAIN}:card_file"
+    requires_auth = False
+
+    def __init__(self, content: bytes) -> None:
+        self._content = content
+
+    async def get(self, request: web.Request) -> web.Response:
+        return web.Response(
+            body=self._content,
+            content_type="text/javascript",
+            headers={"Cache-Control": "no-store"},
+        )
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Self-host the Lovelace card so it loads automatically - no separate
     HACS "Dashboard" download or manual resource registration needed."""
     integration = await async_get_integration(hass, DOMAIN)
-    frontend_dir = Path(integration.file_path) / "frontend"
-    await hass.http.async_register_static_paths(
-        [StaticPathConfig(FRONTEND_URL_BASE, str(frontend_dir), cache_headers=False)]
-    )
+    card_path = Path(integration.file_path) / "frontend" / CARD_FILENAME
+    content = await hass.async_add_executor_job(card_path.read_bytes)
+    hass.http.register_view(_CardFileView(content))
     add_extra_js_url(hass, f"{FRONTEND_URL_BASE}/{CARD_FILENAME}?v={integration.version}")
     return True
 

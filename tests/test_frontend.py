@@ -14,6 +14,7 @@ async def test_card_file_is_served_over_http(hass: HomeAssistant, hass_client) -
     client = await hass_client()
     resp = await client.get(f"/{DOMAIN}_files/irrigation-sequencer-card.js")
     assert resp.status == 200
+    assert resp.headers["Cache-Control"] == "no-store"
     body = await resp.text()
     assert "irrigation-sequencer-status-card" in body
     assert "irrigation-sequencer-settings-card" in body

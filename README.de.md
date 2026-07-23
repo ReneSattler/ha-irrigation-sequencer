@@ -119,7 +119,9 @@ manuelle Lovelace-Ressource nötig.
 > PWA mit eigenem Service Worker, der die App-Hülle unabhängig davon
 > cached, was diese Integration ausliefert - das ist ein Verhalten von
 > Home-Assistant-Core selbst, das eine Custom Integration weder steuern
-> noch umgehen kann. Browser-Cache für deine Home-Assistant-URL löschen
+> noch umgehen kann (die Card-Datei selbst wird bereits mit
+> `Cache-Control: no-store` und einer versionierten URL ausgeliefert, liegt
+> also nicht daran). Browser-Cache für deine Home-Assistant-URL löschen
 > (Desktop: DevTools → Anwendung/Speicher → "Websitedaten löschen", oder
 > einfach Browserdaten für die Seite löschen; Handy-App: Cache/Speicher der
 > App in den Telefon-Einstellungen leeren), dann neu öffnen.
