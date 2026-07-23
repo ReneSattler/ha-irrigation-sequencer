@@ -5,6 +5,19 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.2.7] - 2026-07-22
+
+- Hardening: the self-hosted card file is now served through a small
+  custom view instead of HA's built-in static-path helper, so it can send
+  an explicit `Cache-Control: no-store` header (the built-in helper only
+  offered "1 month public cache" or no header at all, the latter still
+  leaving the response open to browser heuristic caching). Not a fix for
+  the "Custom element doesn't exist" report that prompted this - that
+  traced back to Home Assistant's own frontend service worker caching the
+  `/` page shell, which is core behavior a custom integration can't
+  control - but genuine defense in depth for the file this integration
+  does serve. Documented in both READMEs.
+
 ## [1.2.6] - 2026-07-22
 
 - Documentation only: explained that a "Configuration error" right after

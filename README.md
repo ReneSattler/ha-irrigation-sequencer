@@ -107,7 +107,9 @@ and no Lovelace resource to add by hand, on either install path.
 > Home Assistant's frontend is a PWA with its own service worker that
 > caches the app shell independently of what this integration serves -
 > that's Home Assistant core behavior, not something a custom integration
-> can control or bypass. Clear the browser's cache for your Home Assistant
+> can control or bypass (the card's own file is already served with
+> `Cache-Control: no-store` and a version-tagged URL, so it isn't the
+> cause). Clear the browser's cache for your Home Assistant
 > URL (desktop: DevTools → Application/Storage → "Clear site data", or
 > just clear browsing data for the site; mobile app: clear the app's
 > cache/storage in your phone's app settings), then reopen.
