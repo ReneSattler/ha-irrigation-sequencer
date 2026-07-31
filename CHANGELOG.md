@@ -5,6 +5,18 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.3.2] - 2026-07-31
+
+- Fixed: a timeline segment could collapse to a sliver showing only its
+  zone number, while the rest stayed proportional - reported live during a
+  run. `Math.max(1, NaN)` returns NaN rather than clamping, so a missing or
+  non-numeric zone duration reached the DOM as `flex-grow:NaN`. Browsers
+  reject that, fall back to `flex-grow: 0`, and the segment shrinks to the
+  width of its own label. The guard looked like it handled bad input but
+  never did; the same applied to the pause length. Values are now coerced
+  explicitly and fall back to a sane default, and the tooltip reports the
+  same number the bar is drawn from so the two can't disagree.
+
 ## [1.3.1] - 2026-07-31
 
 - Regenerated the README screenshots so they show the 1.3.0 UI (the
