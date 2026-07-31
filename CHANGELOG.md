@@ -5,6 +5,19 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.2.11] - 2026-07-31
+
+- Fixed: `CARD_VERSION` in the card source had been stuck at `1.2.0` ever
+  since v1.2.0 - it was never bumped across the following nine releases.
+  That string is logged to the browser console for the sole purpose of
+  telling you which version actually loaded, so a stale value defeats its
+  own purpose; it actively misled a live debugging session, where a
+  correctly served, current file looked like a stale one. The served file
+  was always the right one - only the string was wrong.
+- Added a test asserting `CARD_VERSION` matches `manifest.json` so this
+  can't drift again, and removed the hardcoded version from the resource
+  test so releases don't need test edits.
+
 ## [1.2.10] - 2026-07-23
 
 - Hardening after a report from a second instance where neither the

@@ -1,11 +1,25 @@
 """Tests for the self-hosted Lovelace card (no separate HACS Dashboard entry
 or manual resource needed - the integration serves and registers its own
 frontend module on startup)."""
+import json
+import re
+from pathlib import Path
+
 from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
 
 from custom_components.irrigation_sequencer import _async_ensure_lovelace_resource
 from custom_components.irrigation_sequencer.const import DOMAIN
+
+COMPONENT_DIR = (
+    Path(__file__).resolve().parent.parent / "custom_components" / "irrigation_sequencer"
+)
+
+
+def _manifest_version() -> str:
+    """Read the version from the manifest so tests don't hardcode it and
+    need touching on every release."""
+    return json.loads((COMPONENT_DIR / "manifest.json").read_text())["version"]
 
 
 async def test_card_file_is_served_over_http(hass: HomeAssistant, hass_client) -> None:
@@ -39,7 +53,9 @@ async def test_registers_lovelace_resource_on_setup(hass: HomeAssistant) -> None
     matches = [i for i in items if i["url"].startswith("/irrigation_sequencer_files/")]
     assert len(matches) == 1
     assert matches[0]["type"] == "module"
-    assert matches[0]["url"].endswith("irrigation-sequencer-card.js?v=1.2.10")
+    assert matches[0]["url"].endswith(
+        f"irrigation-sequencer-card.js?v={_manifest_version()}"
+    )
 
 
 async def test_lovelace_resource_is_updated_not_duplicated_on_version_change(
@@ -118,3 +134,17 @@ async def test_resource_registration_failure_does_not_break_setup(
 
     # Setup still succeeded and the card is still delivered via the fallback.
     mock_add_js.assert_called_once()
+
+
+def test_card_version_matches_manifest() -> None:
+    """The card logs CARD_VERSION to the browser console specifically so you
+    can tell which version actually loaded. It sat at 1.2.0 through nine
+    releases because nothing checked it, which actively misled a live
+    debugging session - the served file was current, only the string was
+    stale."""
+    card_source = (
+        COMPONENT_DIR / "frontend" / "irrigation-sequencer-card.js"
+    ).read_text(encoding="utf-8")
+    match = re.search(r'const CARD_VERSION = "([^"]+)"', card_source)
+    assert match, "CARD_VERSION not found in the card source"
+    assert match.group(1) == _manifest_version()
