@@ -136,9 +136,23 @@ manuelle Lovelace-Ressource nötig.
 > dem Fall eine Warnung mit der exakten URL ins Log, die du dann manuell
 > als **JavaScript-Modul** hinzufügen kannst.
 >
-> **Cards fehlen weiterhin, und unter Einstellungen → Dashboards →
-> Ressourcen steht gar kein `irrigation-sequencer-card.js`-Eintrag?** Dann
-> hat die automatische Registrierung auf deiner Instanz nicht geklappt.
+> **Cards fehlen und unter Einstellungen → Dashboards → Ressourcen steht
+> kein `irrigation-sequencer-card.js`-Eintrag? Prüfe zuerst, ob die
+> Integration überhaupt eingerichtet ist.** Das Herunterladen in HACS ist
+> nur die halbe Miete - solange du sie nicht unter **Einstellungen →
+> Geräte & Dienste → Integration hinzufügen** einrichtest, führt Home
+> Assistant den Setup-Code der Integration gar nicht aus: die Card-Datei
+> wird nicht ausgeliefert und keine Ressource registriert. Dieser Fall ist
+> systembedingt lautlos: es scheitert ja nichts, also bleibt das Log
+> komplett leer - **gar keine** Meldung von `irrigation_sequencer`. Genau
+> diese Stille (statt eines Fehlers) ist das Erkennungsmerkmal. Schnelltest:
+> `/irrigation_sequencer_files/irrigation-sequencer-card.js` an deiner
+> Home-Assistant-URL aufrufen - kommt 404, lief das Setup nie; kommt
+> JavaScript-Code, lief es. (Achte auf einen doppelten Schrägstrich nach
+> dem Port - der liefert einen 404, der echt aussieht.)
+>
+> **Integration ist eingerichtet, aber trotzdem kein Ressourcen-Eintrag?**
+> Dann hat die automatische Registrierung auf deiner Instanz nicht geklappt.
 > Trag sie von Hand ein: **Einstellungen → Dashboards → Ressourcen →
 > Ressource hinzufügen**, URL
 > `/irrigation_sequencer_files/irrigation-sequencer-card.js`, Typ
