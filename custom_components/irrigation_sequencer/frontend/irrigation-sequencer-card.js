@@ -22,7 +22,7 @@ const DEFAULT_ZONE_DURATION_MINUTES = 10;
 // browser console, whether an update actually took effect versus just
 // looking "the same" as before. Keep this in step with manifest.json's
 // "version" on every release.
-const CARD_VERSION = "1.4.0";
+const CARD_VERSION = "1.4.1";
 // eslint-disable-next-line no-console
 console.info(
   `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
@@ -65,6 +65,8 @@ const TRANSLATIONS = {
     start: "Start now",
     stop: "Stop",
     nextRun: "Next run",
+    totalDuration: "Total duration",
+    totalRemaining: "Total remaining",
     remainingTotal: (t) => `${t} remaining (total)`,
     remainingZone: (t) => `${t} remaining`,
     dragHandle: "Drag to reorder",
@@ -121,6 +123,8 @@ const TRANSLATIONS = {
     start: "Jetzt starten",
     stop: "Stoppen",
     nextRun: "Nächster Lauf",
+    totalDuration: "Gesamtdauer",
+    totalRemaining: "Gesamt verbleibend",
     remainingTotal: (t) => `noch ${t} gesamt`,
     remainingZone: (t) => `noch ${t}`,
     dragHandle: "Ziehen zum Umsortieren",
@@ -223,6 +227,22 @@ function linearFactor(temp, referenceTemp, hotTemp, hotFactor) {
 /** Minutes with at most one decimal, without a trailing ".0" - a scaled
  * duration is rarely a whole number, but "7.5 min" reads better than
  * "7.5000000001 min" or a misleading rounded "8 min". */
+/** Duration for the total/remaining tile. formatSeconds() renders mm:ss,
+ * which is fine for a single zone but turns a two-hour run into
+ * "115:06 min" - technically right, unreadable in practice. Switch to
+ * hours past the hour mark and drop to whole minutes there, since seconds
+ * are noise at that scale. */
+function formatDuration(totalSeconds) {
+  const seconds = Math.max(0, Math.round(Number(totalSeconds) || 0));
+  const totalMinutes = Math.round(seconds / 60);
+  if (totalMinutes >= 60) {
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours}:${String(minutes).padStart(2, "0")} h`;
+  }
+  return formatSeconds(seconds);
+}
+
 function formatMinutes(minutes) {
   return (Math.round(minutes * 10) / 10).toString();
 }
@@ -724,6 +744,15 @@ class IrrigationSequencerStatusCard extends IrrigationSequencerBaseCard {
                 </div>
               </div>`
         }
+        <div class="stat" style="--tile-color: var(--success-color, #4caf50)">
+          <ha-icon icon="mdi:timer-sand"></ha-icon>
+          <div>
+            <div class="stat-value">${formatDuration(
+              isBusy ? remaining : attrs.scaled_total_seconds ?? attrs.estimated_total_seconds ?? 0
+            )}</div>
+            <div class="stat-label">${isBusy ? t.totalRemaining : t.totalDuration}</div>
+          </div>
+        </div>
         ${
           attrs.weather_adjustment_enabled && attrs.weather_current_temp != null
             ? `<div class="stat" style="--tile-color: var(--primary-color)">
