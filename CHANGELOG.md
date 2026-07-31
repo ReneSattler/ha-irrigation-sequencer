@@ -5,6 +5,17 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.2.12] - 2026-07-31
+
+- Documentation only: added the failure mode that cost the most time to
+  diagnose so far - downloading the integration in HACS without also
+  adding it under Settings > Devices & Services. Home Assistant then never
+  runs the integration's setup code, so the card file isn't served and no
+  resource is registered, and because nothing actually fails the log stays
+  completely empty. That silence, rather than an error, is the tell.
+  Documented the URL check that distinguishes it (including the doubled
+  slash that produces a convincing false 404).
+
 ## [1.2.11] - 2026-07-31
 
 - Fixed: `CARD_VERSION` in the card source had been stuck at `1.2.0` ever

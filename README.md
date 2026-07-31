@@ -122,8 +122,21 @@ and no Lovelace resource to add by hand, on either install path.
 > - the integration logs a warning naming the exact URL in that case, and
 > you can add it manually as a **JavaScript module**.
 >
-> **Cards still missing, and Settings → Dashboards → Resources has no
-> `irrigation-sequencer-card.js` entry at all?** Then the automatic
+> **Cards missing and no `irrigation-sequencer-card.js` entry under
+> Settings → Dashboards → Resources? Check that the integration is
+> actually set up first.** Downloading it in HACS is only half the job -
+> until you add it under **Settings → Devices & Services → Add
+> Integration**, Home Assistant never runs the integration's setup code at
+> all, so the card file isn't served and no resource is registered. This
+> failure is quiet by design: nothing errors, so the log stays completely
+> empty - no messages from `irrigation_sequencer` whatsoever. That silence
+> (rather than an error) is the tell. A quick check is to open
+> `/irrigation_sequencer_files/irrigation-sequencer-card.js` on your Home
+> Assistant URL: a 404 means setup never ran; JavaScript source means it
+> did. (Watch for a doubled slash after the port when typing that URL - it
+> returns a 404 that looks like the real thing.)
+>
+> **Integration set up, but still no resource entry?** Then the automatic
 > registration didn't go through on your instance. Add it by hand:
 > **Settings → Dashboards → Resources → Add resource**, URL
 > `/irrigation_sequencer_files/irrigation-sequencer-card.js`, type
