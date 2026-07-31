@@ -136,6 +136,19 @@ manuelle Lovelace-Ressource nötig.
 > dem Fall eine Warnung mit der exakten URL ins Log, die du dann manuell
 > als **JavaScript-Modul** hinzufügen kannst.
 >
+> **Cards fehlen weiterhin, und unter Einstellungen → Dashboards →
+> Ressourcen steht gar kein `irrigation-sequencer-card.js`-Eintrag?** Dann
+> hat die automatische Registrierung auf deiner Instanz nicht geklappt.
+> Trag sie von Hand ein: **Einstellungen → Dashboards → Ressourcen →
+> Ressource hinzufügen**, URL
+> `/irrigation_sequencer_files/irrigation-sequencer-card.js`, Typ
+> **JavaScript-Modul**. Mehr hätte die Integration auch nicht angelegt -
+> die Cards funktionieren danach identisch. Hilfreich wäre außerdem ein
+> Blick in **Einstellungen → System → Protokolle** nach
+> `irrigation_sequencer`: die Integration protokolliert eine Warnung mit
+> dem Grund für den Fallback, und diese Zeile in einem Issue hilft dabei,
+> den automatischen Weg auch für dein Setup zu reparieren.
+>
 > **Cards zeigen "Konfigurationsfehler" oder verschwinden, nachdem du eine
 > Zone hinzugefügt/entfernt hast?** Das Hinzufügen einer Zone lädt den
 > Konfigurationseintrag der Integration neu, und ein Tab, der vorher schon

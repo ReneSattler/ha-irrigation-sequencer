@@ -39,7 +39,7 @@ async def test_registers_lovelace_resource_on_setup(hass: HomeAssistant) -> None
     matches = [i for i in items if i["url"].startswith("/irrigation_sequencer_files/")]
     assert len(matches) == 1
     assert matches[0]["type"] == "module"
-    assert matches[0]["url"].endswith("irrigation-sequencer-card.js?v=1.2.9")
+    assert matches[0]["url"].endswith("irrigation-sequencer-card.js?v=1.2.10")
 
 
 async def test_lovelace_resource_is_updated_not_duplicated_on_version_change(
@@ -94,3 +94,27 @@ async def test_falls_back_to_extra_js_url_when_resource_cannot_be_registered(
     assert mock_add_js.call_args[0][1].startswith(
         "/irrigation_sequencer_files/irrigation-sequencer-card.js?v="
     )
+
+
+async def test_resource_registration_failure_does_not_break_setup(
+    hass: HomeAssistant,
+) -> None:
+    """Registering the resource touches Lovelace internals that aren't a
+    stable public API. If that ever raises, it must not abort async_setup -
+    doing so would take down every entity and service too and leave the
+    user with neither a resource nor a working card (reported from a real
+    instance where the cards and the resource entry were both missing)."""
+    from unittest.mock import patch
+
+    with (
+        patch(
+            "custom_components.irrigation_sequencer._async_ensure_lovelace_resource",
+            side_effect=RuntimeError("lovelace internals changed"),
+        ),
+        patch("custom_components.irrigation_sequencer.add_extra_js_url") as mock_add_js,
+    ):
+        assert await async_setup_component(hass, DOMAIN, {})
+        await hass.async_block_till_done()
+
+    # Setup still succeeded and the card is still delivered via the fallback.
+    mock_add_js.assert_called_once()

@@ -11,13 +11,25 @@ from aiohttp import web
 
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import HomeAssistantView
-from homeassistant.components.lovelace.const import LOVELACE_DATA
-from homeassistant.components.lovelace.resources import ResourceStorageCollection
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
+
+# Lovelace's resource collection is not part of Home Assistant's stable
+# public API - the import path and names have moved between core versions.
+# Importing them at module scope unguarded means a single rename in core
+# takes down the whole integration (no entities, no services, no cards) on
+# any version that doesn't match, which is a catastrophic failure mode for
+# what is only a convenience feature. Degrade to the add_extra_js_url()
+# fallback instead if they can't be imported.
+try:
+    from homeassistant.components.lovelace.const import LOVELACE_DATA
+    from homeassistant.components.lovelace.resources import ResourceStorageCollection
+except ImportError:  # pragma: no cover - depends on the core version
+    LOVELACE_DATA = None
+    ResourceStorageCollection = None
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -163,9 +175,12 @@ async def _async_ensure_lovelace_resource(hass: HomeAssistant, version: str) -> 
     way we can write to - the caller then falls back to add_extra_js_url()
     so the card still loads either way.
     """
+    if LOVELACE_DATA is None or ResourceStorageCollection is None:
+        return False
+
     lovelace_data = hass.data.get(LOVELACE_DATA)
     if lovelace_data is None or not isinstance(
-        lovelace_data.resources, ResourceStorageCollection
+        getattr(lovelace_data, "resources", None), ResourceStorageCollection
     ):
         return False
 
@@ -194,7 +209,22 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.http.register_view(_CardFileView(content))
 
     card_url = f"{FRONTEND_URL_BASE}/{CARD_FILENAME}?v={integration.version}"
-    if await _async_ensure_lovelace_resource(hass, integration.version):
+    # Broad except on purpose: registering the resource touches Lovelace
+    # internals that aren't a stable public API, and this is only a
+    # convenience step. Letting anything from it escape would abort
+    # async_setup entirely - taking down every entity and service too, and
+    # leaving the user with neither a resource nor a working card, which is
+    # exactly the failure that made this hardening necessary.
+    try:
+        registered = await _async_ensure_lovelace_resource(hass, integration.version)
+    except Exception:  # noqa: BLE001 - never let this break integration setup
+        _LOGGER.exception(
+            "Registering the Lovelace resource for the Irrigation Sequencer card "
+            "failed unexpectedly; falling back to injecting it into the frontend"
+        )
+        registered = False
+
+    if registered:
         _LOGGER.debug("Registered Lovelace resource for the card: %s", card_url)
     else:
         # Instances in YAML resource mode (or with lovelace set up in a way
@@ -205,10 +235,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         add_extra_js_url(hass, card_url)
         _LOGGER.warning(
             "Could not register a Lovelace resource for the Irrigation Sequencer "
-            "card (this instance appears to manage Lovelace resources via YAML). "
-            "Falling back to injecting the card into the frontend directly. If the "
-            "cards don't show up in the card picker, add %s manually as a "
-            "JavaScript module under Settings > Dashboards > Resources.",
+            "card - this instance either manages Lovelace resources via YAML or "
+            "runs a Home Assistant version whose Lovelace internals this "
+            "integration can't write to. Falling back to injecting the card into "
+            "the frontend directly. If the cards still don't show up in the card "
+            "picker, add %s manually as a JavaScript module under "
+            "Settings > Dashboards > Resources.",
             card_url,
         )
     return True

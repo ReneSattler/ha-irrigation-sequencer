@@ -122,6 +122,17 @@ and no Lovelace resource to add by hand, on either install path.
 > - the integration logs a warning naming the exact URL in that case, and
 > you can add it manually as a **JavaScript module**.
 >
+> **Cards still missing, and Settings → Dashboards → Resources has no
+> `irrigation-sequencer-card.js` entry at all?** Then the automatic
+> registration didn't go through on your instance. Add it by hand:
+> **Settings → Dashboards → Resources → Add resource**, URL
+> `/irrigation_sequencer_files/irrigation-sequencer-card.js`, type
+> **JavaScript module**. That's all the integration would have created
+> itself, so the cards work identically afterwards. It'd also help to
+> check **Settings → System → Logs** for `irrigation_sequencer` - the
+> integration logs a warning explaining why it fell back, and reporting
+> that line in an issue helps get the automatic path fixed for your setup.
+>
 > **Cards show "Configuration error" or vanish after adding/removing a
 > zone?** Adding a zone reloads the integration's config entry, and a tab
 > that was open beforehand can briefly render against a stale mix of old
