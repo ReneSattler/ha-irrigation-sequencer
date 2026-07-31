@@ -36,6 +36,27 @@ DEFAULT_WEATHER_HOT_FACTOR = 2.0
 MIN_WEATHER_FACTOR = 0.1
 MAX_WEATHER_FACTOR = 3.0
 
+# Which temperature the factor is derived from.
+#
+# "forecast_high" is the default because runs are typically scheduled for
+# the night or early morning, when the current temperature is at its
+# lowest and says nothing about how hot the day will get. Deriving the
+# factor from it inverts the feature's intent: a 37 deg day with a 01:00
+# run would water at ~0.8x instead of ~2.7x, i.e. least on the hottest
+# days. The daily forecast's first entry covers the day the run starts in,
+# which is what "how much water does the lawn need today" depends on.
+#
+# "current" keeps the pre-1.3.0 behaviour for anyone who wants it.
+WEATHER_TEMP_SOURCE_FORECAST_HIGH = "forecast_high"
+WEATHER_TEMP_SOURCE_CURRENT = "current"
+WEATHER_TEMP_SOURCES = [WEATHER_TEMP_SOURCE_FORECAST_HIGH, WEATHER_TEMP_SOURCE_CURRENT]
+DEFAULT_WEATHER_TEMP_SOURCE = WEATHER_TEMP_SOURCE_FORECAST_HIGH
+
+# How often the cached forecast high is refreshed. The value is also
+# refreshed unconditionally right before a sequence starts, so this only
+# governs how fresh the number shown on the card is.
+FORECAST_REFRESH_MINUTES = 30
+
 STORAGE_VERSION = 1
 STORAGE_KEY_PREFIX = f"{DOMAIN}_state"
 
@@ -76,7 +97,18 @@ ATTR_WEATHER_REFERENCE_TEMP = "weather_reference_temp"
 ATTR_WEATHER_HOT_TEMP = "weather_hot_temp"
 ATTR_WEATHER_HOT_FACTOR = "weather_hot_factor"
 ATTR_WEATHER_CURRENT_TEMP = "weather_current_temp"
+# The factor that will actually be applied to every zone's duration. Named
+# "current" since 0.x and kept for compatibility with already-installed
+# cards; since 1.3.0 it is derived from whichever temperature source is
+# configured, not necessarily the current temperature.
 ATTR_WEATHER_CURRENT_FACTOR = "weather_current_factor"
+ATTR_WEATHER_TEMP_SOURCE = "weather_temp_source"
+ATTR_WEATHER_FORECAST_HIGH = "weather_forecast_high"
+ATTR_WEATHER_EFFECTIVE_TEMP = "weather_effective_temp"
+# Total run time with the weather factor applied - what the sequence will
+# really take. Kept separate from ATTR_ESTIMATED_TOTAL_SECONDS, which stays
+# unscaled because the start-time overlap check is validated against it.
+ATTR_SCALED_TOTAL_SECONDS = "scaled_total_seconds"
 ATTR_NOTIFY_TARGET = "notify_target"
 
 # Notification sent after a completed run, when a notify target is

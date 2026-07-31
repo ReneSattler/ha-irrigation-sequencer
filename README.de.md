@@ -45,13 +45,20 @@ im Browser ausprobieren kannst.*
   Regen) über einen einzigen Schieberegler, der sie auch wieder ausschaltet
   (auf 0 ziehen); danach läuft der normale Zeitplan automatisch wieder
 - **Wetterbasierte Dauer-Anpassung** – optional die Dauer jeder Zone mit einem
-  Faktor multiplizieren, der aus der aktuellen Außentemperatur berechnet wird,
+  Faktor multiplizieren, der aus der Außentemperatur berechnet wird,
   linear interpoliert zwischen zwei Referenzpunkten. Beispiel mit den
   Standardwerten (Faktor 1.0 bei 20 °C, Faktor 2.0 bei 30 °C): bei 25 °C ist
-  der Faktor 1.5 – eine 5-minütige Zone läuft dann 7,5 Minuten. Die
-  Status-Card zeigt zusätzlich die Tageshöchsttemperatur laut Prognose (sofern
-  die Wetter-Entität eine liefert) und den daraus resultierenden Faktor – so
-  siehst du schon vorab, wie der nächste Lauf ausfallen würde.
+  der Faktor 1.5 – eine 5-minütige Zone läuft dann 7,5 Minuten.
+
+  Standardmäßig wird die **Tageshöchsttemperatur aus der Prognose** verwendet,
+  nicht die aktuelle Temperatur. Läufe sind meist nachts oder früh morgens
+  geplant – da ist die aktuelle Temperatur am niedrigsten und sagt nichts
+  darüber aus, wie heiß der Tag wird. Würde man sie verwenden, würde
+  ausgerechnet an den heißesten Tagen *am wenigsten* gewässert. Über die
+  Einstellung **„Faktor basiert auf"** lässt sich auf die aktuelle Temperatur
+  umstellen; sie dient außerdem automatisch als Rückfallwert, wenn deine
+  Wetter-Integration keine Prognose liefert. Die Zeitleiste auf der
+  Status-Card zeigt die Zeiten inklusive Faktor, mit entsprechendem Hinweis.
 - **Optionale Mobile-Benachrichtigung** – in der Settings-Card ein Gerät
   auswählen (aus deinen `notify.mobile_app_*`-Diensten), um nach jedem
   abgeschlossenen Lauf eine Benachrichtigung mit der Dauer zu erhalten;

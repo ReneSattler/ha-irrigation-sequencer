@@ -41,12 +41,19 @@ Home Assistant instance.*
   rainfall) via a single slider that also turns it off again (drag to 0); the
   normal schedule resumes automatically once the pause expires
 - **Weather-based duration adjustment** - optionally scale every zone's
-  duration by a factor derived from the current outside temperature, linearly
+  duration by a factor derived from the outside temperature, linearly
   interpolated between two reference points. Example with the defaults
   (factor 1.0 at 20 °C, factor 2.0 at 30 °C): at 25 °C the factor is 1.5, so a
-  5-minute zone runs for 7.5 minutes. The status card also shows today's
-  forecast high (when the weather entity provides one) and the factor it
-  would result in, so you can see tomorrow's plan at a glance.
+  5-minute zone runs for 7.5 minutes.
+
+  By default the factor uses **the day's forecast high**, not the current
+  temperature. Runs are usually scheduled for the night or early morning,
+  when the current temperature is at its lowest and says nothing about how
+  hot the day will get - deriving the factor from it would water *least* on
+  the hottest days. A **"Factor based on"** setting switches to the current
+  temperature if you prefer it, and it is used automatically as a fallback
+  when your weather integration provides no forecast. The timeline on the
+  status card shows the times including the factor, with a note saying so.
 - **Optional mobile notification** - pick a device from the settings card
   (sourced from your `notify.mobile_app_*` services) to get a notification
   after each completed run with its duration; defaults to "none" (no
