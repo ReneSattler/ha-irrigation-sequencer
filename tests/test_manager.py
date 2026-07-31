@@ -1,11 +1,23 @@
 """Unit tests for IrrigationSequencerManager's core logic."""
+import asyncio
 from datetime import date, timedelta
+from unittest.mock import patch
 
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 
 from custom_components.irrigation_sequencer.manager import IrrigationSequencerManager
+
+
+_real_sleep = asyncio.sleep
+
+
+async def _instant_sleep(_seconds):
+    """Collapse the sequence's 1-second ticks so a multi-minute run is
+    testable, while still yielding so other tasks (like a duration change
+    arriving mid-run) can interleave exactly as they would in reality."""
+    await _real_sleep(0)
 
 
 def make_manager(hass: HomeAssistant, zone_entities=None) -> IrrigationSequencerManager:
@@ -411,3 +423,67 @@ async def test_scaled_total_applies_factor_but_estimate_does_not(
 
     assert manager.estimated_total_seconds == 10 * 60 * 2 + 120
     assert manager.scaled_total_seconds == 10 * 60 * 2 * 2 + 120
+
+
+# --------------------------------------------------------------------- #
+# Changing a zone's duration while that zone is running
+# --------------------------------------------------------------------- #
+
+
+async def test_shortening_a_running_zone_ends_it_immediately(
+    hass: HomeAssistant,
+) -> None:
+    """Reported live: a zone was running on its planned 18 minutes and the
+    duration was changed to 1 minute from the card. The run used to freeze
+    the target at zone start, so the valve kept going on the old value
+    while the timeline already showed the new one - countdown and bar
+    contradicting each other. The target is now re-read every tick, so a
+    duration already behind us ends the zone at once."""
+    manager = make_manager(hass, ["switch.zone_1"])
+    manager.zones[0]["duration_minutes"] = 18
+
+    calls = []
+
+    async def fake_set_valve(entity_id, on):
+        calls.append((entity_id, on))
+
+    manager._async_set_valve = fake_set_valve
+
+    async def shorten_after_a_moment():
+        await asyncio.sleep(0.05)
+        await manager.async_set_zone_duration("switch.zone_1", 1)
+
+    with patch("asyncio.sleep", _instant_sleep):
+        run = asyncio.create_task(manager._async_run_sequence())
+        await shorten_after_a_moment()
+        await asyncio.wait_for(run, timeout=5)
+
+    # It stopped well short of the original 18 minutes.
+    assert manager.status == "idle"
+    assert ("switch.zone_1", False) in calls
+
+
+async def test_lengthening_a_running_zone_extends_it(hass: HomeAssistant) -> None:
+    """The mirror case: raising the duration mid-run keeps the zone going
+    rather than ending it on the value captured at start."""
+    manager = make_manager(hass, ["switch.zone_1"])
+    manager.zones[0]["duration_minutes"] = 1
+
+    assert manager._zone_seconds_for("switch.zone_1") == 60
+    await manager.async_set_zone_duration("switch.zone_1", 5)
+    assert manager._zone_seconds_for("switch.zone_1") == 300
+
+
+async def test_remaining_total_reflects_current_config(hass: HomeAssistant) -> None:
+    """The countdown is priced at the current configuration, so it can
+    never disagree with what the timeline draws."""
+    manager = make_manager(hass, ["switch.zone_1", "switch.zone_2"])
+    manager.zones[0]["duration_minutes"] = 10
+    manager.zones[1]["duration_minutes"] = 10
+    manager.pause_between_zones_seconds = 120
+
+    # Standing at the start of zone 0 with its full 10 minutes left.
+    assert manager._remaining_after(0, 600, include_next_pause=True) == 600 + 600 + 120
+
+    await manager.async_set_zone_duration("switch.zone_2", 5)
+    assert manager._remaining_after(0, 600, include_next_pause=True) == 600 + 300 + 120

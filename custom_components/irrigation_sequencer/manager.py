@@ -521,58 +521,99 @@ class IrrigationSequencerManager:
             self.pause_between_zones_seconds * max(0, len(self.zones) - 1)
         )
 
+    def _zone_seconds_for(self, entity_id: str) -> int:
+        """Currently configured (weather-scaled) run time for a zone, looked
+        up fresh by entity id. The running sequence re-reads this every tick
+        instead of freezing it at zone start, so a duration changed from the
+        card takes effect on the zone that is running right now."""
+        for zone in self.zones:
+            if zone["entity_id"] == entity_id:
+                return self._zone_duration_seconds(zone)
+        return 0
+
+    def _remaining_after(self, index: int, head_seconds: int, include_next_pause: bool) -> int:
+        """Total seconds left: whatever is left of the current phase plus
+        every zone and pause still to come, priced at the *current*
+        configuration so the countdown never contradicts the timeline."""
+        later = self.zones[index + 1 :]
+        rest = sum(self._zone_duration_seconds(zone) for zone in later)
+        pauses = self.pause_between_zones_seconds * (
+            len(later) if include_next_pause else max(0, len(later) - 1)
+        )
+        return head_seconds + rest + pauses
+
     async def _async_run_sequence(self) -> None:
         # Never scale the run off a stale forecast.
         await self.async_refresh_forecast()
-        total_seconds = sum(
-            self._zone_duration_seconds(zone) for zone in self.zones
-        ) + self.pause_between_zones_seconds * max(0, len(self.zones) - 1)
-        self.seconds_remaining_total = total_seconds
+        # Snapshot the order so the iteration stays stable, but always look
+        # durations up by entity id - self.zones is replaced wholesale on
+        # every change.
+        planned = list(self.zones)
+        self.seconds_remaining_total = self._remaining_after(-1, 0, include_next_pause=False)
+        run_elapsed = 0
 
         try:
-            for index, zone in enumerate(self.zones):
+            for index, planned_zone in enumerate(planned):
                 if self._stop_requested:
                     break
 
+                entity_id = planned_zone["entity_id"]
                 self.current_zone_index = index
                 self.last_zone_index = index
                 self.status = STATE_RUNNING
-                duration_seconds = self._zone_duration_seconds(zone)
-                self.seconds_remaining_zone = duration_seconds
+                zone_elapsed = 0
+                self.seconds_remaining_zone = self._zone_seconds_for(entity_id)
+                self.seconds_remaining_total = self._remaining_after(
+                    index, self.seconds_remaining_zone, include_next_pause=True
+                )
                 self._notify_listeners()
 
-                await self._async_set_valve(zone["entity_id"], True)
-                # Tick once per second (instead of a single asyncio.sleep for
-                # the whole duration) so the countdown attributes stay live
-                # for the sensor/card and a stop request is picked up quickly.
-                for _ in range(duration_seconds):
-                    if self._stop_requested:
+                await self._async_set_valve(entity_id, True)
+                # Tick once per second (instead of one long sleep) so the
+                # countdown stays live, a stop request is picked up quickly,
+                # and - re-reading the target every pass - a duration edited
+                # mid-run applies immediately, ending the zone at once if the
+                # new value is already behind us.
+                while not self._stop_requested:
+                    target = self._zone_seconds_for(entity_id)
+                    if zone_elapsed >= target:
                         break
                     await asyncio.sleep(1)
-                    self.seconds_remaining_zone -= 1
-                    self.seconds_remaining_total -= 1
+                    zone_elapsed += 1
+                    run_elapsed += 1
+                    self.seconds_remaining_zone = max(
+                        0, self._zone_seconds_for(entity_id) - zone_elapsed
+                    )
+                    self.seconds_remaining_total = self._remaining_after(
+                        index, self.seconds_remaining_zone, include_next_pause=True
+                    )
                     self._notify_listeners()
-                await self._async_set_valve(zone["entity_id"], False)
+                await self._async_set_valve(entity_id, False)
 
                 if self._stop_requested:
                     break
 
-                is_last_zone = index == len(self.zones) - 1
+                is_last_zone = index == len(planned) - 1
                 if not is_last_zone and self.pause_between_zones_seconds > 0:
                     self.status = STATE_PAUSED_BETWEEN_ZONES
                     self.current_zone_index = None
-                    remaining = self.pause_between_zones_seconds
+                    pause_elapsed = 0
                     self._notify_listeners()
-                    for _ in range(remaining):
-                        if self._stop_requested:
+                    while not self._stop_requested:
+                        target = self.pause_between_zones_seconds
+                        if pause_elapsed >= target:
                             break
                         await asyncio.sleep(1)
-                        self.seconds_remaining_total -= 1
+                        pause_elapsed += 1
+                        run_elapsed += 1
+                        pause_left = max(0, self.pause_between_zones_seconds - pause_elapsed)
+                        self.seconds_remaining_total = self._remaining_after(
+                            index, pause_left, include_next_pause=False
+                        )
                         self._notify_listeners()
         finally:
             for zone in self.zones:
                 await self._async_set_valve(zone["entity_id"], False)
-            elapsed_seconds = max(0, total_seconds - self.seconds_remaining_total)
             self.status = STATE_IDLE
             self.current_zone_index = None
             self.last_zone_index = None
@@ -580,7 +621,9 @@ class IrrigationSequencerManager:
             self.seconds_remaining_total = 0
             self._stop_requested = False
             self._notify_listeners()
-            await self._async_send_completion_notification(elapsed_seconds)
+            # Count the seconds actually spent running rather than deriving
+            # them from a planned total - the plan can change mid-run now.
+            await self._async_send_completion_notification(run_elapsed)
 
     async def _async_send_completion_notification(self, elapsed_seconds: int) -> None:
         """Best-effort notify.<target> call after a run - never lets a

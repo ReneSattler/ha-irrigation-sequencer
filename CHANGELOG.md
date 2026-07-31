@@ -5,6 +5,26 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.4.0] - 2026-07-31
+
+- **Changing a zone's duration now takes effect on the zone that is
+  running right now.** Previously the run captured each zone's target once
+  at zone start and never re-read it, so editing the duration mid-run did
+  nothing to the valve: a zone planned for 18 minutes kept running for 18
+  minutes and the countdown kept ticking down from there, while the
+  timeline immediately redrew that zone at its new 1-minute share. The bar
+  and the countdown contradicted each other, which is what made this look
+  like a rendering bug at first - the narrow segment was the timeline
+  correctly showing the new configuration.
+
+  The tick loop now re-reads the configured duration every pass:
+  shortening past the elapsed time ends the zone at once and moves on to
+  the next, lengthening extends it. `seconds_remaining_total` is
+  recalculated from the current configuration each tick rather than
+  decremented from a plan fixed at start, so the countdown can no longer
+  disagree with the timeline, and the completion notification reports the
+  seconds actually spent running.
+
 ## [1.3.2] - 2026-07-31
 
 - Fixed: a timeline segment could collapse to a sliver showing only its
