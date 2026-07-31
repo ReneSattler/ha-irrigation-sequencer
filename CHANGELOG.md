@@ -5,6 +5,23 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.4.1] - 2026-07-31
+
+- The status card now shows the run's **total duration** - the piece the
+  timeline couldn't convey. The bar shows how the zones relate to each
+  other, not how long the whole thing takes, and since the weather factor
+  landed that matters: at x2.7 a 45-minute plan becomes a nearly two-hour
+  run, which decides whether a 01:00 start is done by morning or collides
+  with the next start time. While a sequence runs, the same tile switches
+  to the remaining total.
+
+  This also puts `scaled_total_seconds` to use - 1.3.0 added the attribute
+  for exactly this and then never displayed it.
+
+- Long durations are no longer formatted as `115:06 min`. Past an hour the
+  value is shown as `1:55 h` and rounded to whole minutes, since seconds
+  are noise at that scale.
+
 ## [1.4.0] - 2026-07-31
 
 - **Changing a zone's duration now takes effect on the zone that is
