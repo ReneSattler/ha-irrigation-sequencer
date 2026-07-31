@@ -11,13 +11,18 @@
 
 const DOMAIN = "irrigation_sequencer";
 
+// Mirrors DEFAULT_ZONE_DURATION_MINUTES in const.py. Only used as a last
+// resort when a zone arrives without a usable duration, so the timeline
+// degrades to a plausible bar instead of a collapsed sliver.
+const DEFAULT_ZONE_DURATION_MINUTES = 10;
+
 // Plain script resources (no build step) are easy for browsers/mobile to
 // cache indefinitely across updates, with no visible sign anything is
 // stale - logging the version on load gives a quick way to check, in the
 // browser console, whether an update actually took effect versus just
 // looking "the same" as before. Keep this in step with manifest.json's
 // "version" on every release.
-const CARD_VERSION = "1.3.1";
+const CARD_VERSION = "1.3.2";
 // eslint-disable-next-line no-console
 console.info(
   `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
@@ -461,14 +466,25 @@ class IrrigationSequencerBaseCard extends HTMLElement {
    * based on last_zone_index (persists through the pause after a zone) and
    * current_zone_index (set only while a zone is actively running). */
   _renderTimeline(zones, attrs, t) {
-    const factor = attrs.weather_current_factor || 1;
+    // Math.max(1, NaN) is NaN, not 1 - so a missing/invalid duration used to
+    // survive all the way into `flex-grow:NaN`, which browsers reject,
+    // falling back to flex-grow:0. The segment then collapsed to the width
+    // of its own label while the others kept growing: a timeline that had
+    // been correctly proportional suddenly showed one sliver of a zone.
+    // Coerce explicitly instead of relying on Math.max to clamp.
+    const positiveOr = (value, fallback) => {
+      const n = Number(value);
+      return Number.isFinite(n) && n > 0 ? n : fallback;
+    };
+    const factor = positiveOr(attrs.weather_current_factor, 1);
     const isRunning = attrs.current_zone_index != null;
     const isPaused = !isRunning && attrs.last_zone_index != null && attrs.seconds_remaining_total > 0;
     const lastIndex = attrs.last_zone_index;
 
     const segments = [];
     zones.forEach((zone, index) => {
-      const seconds = Math.max(1, Math.round(zone.duration_minutes * 60 * factor));
+      const durationMinutes = positiveOr(zone.duration_minutes, DEFAULT_ZONE_DURATION_MINUTES);
+      const seconds = Math.max(1, Math.round(durationMinutes * 60 * factor));
       let cls = "zone-upcoming";
       if (isRunning && index === attrs.current_zone_index) cls = "zone-active";
       else if (lastIndex != null && index <= lastIndex && !(isPaused && index === lastIndex)) cls = "zone-done";
@@ -480,8 +496,8 @@ class IrrigationSequencerBaseCard extends HTMLElement {
       const scaledMinutes = seconds / 60;
       const durationText =
         Math.abs(factor - 1) < 0.005
-          ? `${zone.duration_minutes} min`
-          : `${formatMinutes(scaledMinutes)} min (${zone.duration_minutes} × ${factor.toFixed(2)})`;
+          ? `${formatMinutes(durationMinutes)} min`
+          : `${formatMinutes(scaledMinutes)} min (${formatMinutes(durationMinutes)} × ${factor.toFixed(2)})`;
       segments.push({
         weight: seconds,
         cls,
@@ -489,14 +505,15 @@ class IrrigationSequencerBaseCard extends HTMLElement {
         label: index + 1,
       });
 
-      if (index < zones.length - 1 && attrs.pause_between_zones_seconds > 0) {
+      const pauseSeconds = positiveOr(attrs.pause_between_zones_seconds, 0);
+      if (index < zones.length - 1 && pauseSeconds > 0) {
         let pauseCls = "pause-upcoming";
         if (isPaused && index === lastIndex) pauseCls = "pause-active";
         else if (lastIndex != null && index < lastIndex) pauseCls = "pause-done";
         segments.push({
-          weight: attrs.pause_between_zones_seconds,
+          weight: pauseSeconds,
           cls: pauseCls,
-          title: `${t.pauseBetweenZones}: ${formatSeconds(attrs.pause_between_zones_seconds)}`,
+          title: `${t.pauseBetweenZones}: ${formatSeconds(pauseSeconds)}`,
           label: "",
         });
       }
