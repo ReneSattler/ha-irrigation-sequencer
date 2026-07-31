@@ -22,7 +22,7 @@ const DEFAULT_ZONE_DURATION_MINUTES = 10;
 // browser console, whether an update actually took effect versus just
 // looking "the same" as before. Keep this in step with manifest.json's
 // "version" on every release.
-const CARD_VERSION = "1.4.2";
+const CARD_VERSION = "1.4.3";
 // eslint-disable-next-line no-console
 console.info(
   `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
@@ -69,6 +69,7 @@ const TRANSLATIONS = {
     totalDuration: "Total duration",
     totalRemaining: "Total remaining",
     remainingTotal: (t) => `${t} remaining (total)`,
+    upNext: "Up next",
     remainingZone: (t) => `${t} remaining`,
     dragHandle: "Drag to reorder",
     notFound: (entity) => `Entity ${entity} not found.`,
@@ -128,6 +129,7 @@ const TRANSLATIONS = {
     totalDuration: "Gesamtdauer",
     totalRemaining: "Gesamt verbleibend",
     remainingTotal: (t) => `noch ${t} gesamt`,
+    upNext: "Als Nächstes",
     remainingZone: (t) => `noch ${t}`,
     dragHandle: "Ziehen zum Umsortieren",
     notFound: (entity) => `Entität ${entity} nicht gefunden.`,
@@ -729,6 +731,12 @@ class IrrigationSequencerStatusCard extends IrrigationSequencerBaseCard {
     const layout = this._config.layout === "horizontal" ? "horizontal" : "vertical";
 
     const activeZone = attrs.current_zone_index != null ? zones[attrs.current_zone_index] : null;
+    // During the pause between zones, the dedicated total-duration tile
+    // already covers "time left" - repeating that number in the busy tile
+    // too (as it did before that tile existed) is now pure duplication.
+    // Naming the upcoming zone here adds information instead.
+    const nextZone =
+      !activeZone && attrs.last_zone_index != null ? zones[attrs.last_zone_index + 1] : null;
     const totalPlanned =
       zones.reduce((sum, z) => sum + Math.round(z.duration_minutes * 60 * (attrs.weather_current_factor || 1)), 0) +
       attrs.pause_between_zones_seconds * Math.max(0, zones.length - 1);
@@ -743,7 +751,13 @@ class IrrigationSequencerStatusCard extends IrrigationSequencerBaseCard {
                 <ha-icon icon="mdi:sprinkler-variant"></ha-icon>
                 <div>
                   <div class="stat-value">${activeZone ? zoneDisplayName(this._hass, activeZone) : t.pauseBetweenZones}</div>
-                  <div class="stat-label">${activeZone ? t.remainingZone(formatSeconds(attrs.seconds_remaining_zone)) : t.remainingTotal(formatSeconds(remaining))}</div>
+                  <div class="stat-label">${
+                    activeZone
+                      ? t.remainingZone(formatSeconds(attrs.seconds_remaining_zone))
+                      : nextZone
+                        ? `${t.upNext}: ${zoneDisplayName(this._hass, nextZone)}`
+                        : t.remainingTotal(formatSeconds(remaining))
+                  }</div>
                 </div>
               </div>`
             : `<div class="stat" style="--tile-color: var(--info-color, #03a9f4)">

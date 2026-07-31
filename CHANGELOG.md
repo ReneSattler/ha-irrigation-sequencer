@@ -5,6 +5,16 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.4.3] - 2026-07-31
+
+- Fixed: during the pause between zones, the busy tile repeated the exact
+  same "time remaining" number the 1.4.1 total-duration tile already
+  shows, right next to it. Before that tile existed this was the only
+  place showing the total, so it made sense there; it became a straight
+  duplicate once the dedicated tile landed. The busy tile now names the
+  upcoming zone during a pause instead ("Up next: Lawn 3"), which adds
+  information rather than repeating it.
+
 ## [1.4.2] - 2026-07-31
 
 - Fixed a warning this integration caused at every startup: the initial
