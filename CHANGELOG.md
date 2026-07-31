@@ -5,6 +5,19 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.3.1] - 2026-07-31
+
+- Regenerated the README screenshots so they show the 1.3.0 UI (the
+  forecast-high setting and the "times include the weather factor" note on
+  the timeline) instead of the older layout. Added `screenshots/render.py`
+  so they stay reproducible rather than being one-off artifacts - a stale
+  screenshot is its own kind of wrong documentation.
+- Fixed two label issues that only became visible in those renders: the
+  "Factor based on" option text overflowed its select, and the factor
+  footnote produced nested parentheses ("... (Tageshöchstwert
+  (Prognose))"). Options are now short ("Forecast high" /
+  "Tageshöchstwert") and the footnote separates with a middot.
+
 ## [1.3.0] - 2026-07-31
 
 - **Fixed a significant watering bug**: the weather factor was derived from

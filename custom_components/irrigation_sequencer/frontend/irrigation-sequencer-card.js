@@ -17,7 +17,7 @@ const DOMAIN = "irrigation_sequencer";
 // browser console, whether an update actually took effect versus just
 // looking "the same" as before. Keep this in step with manifest.json's
 // "version" on every release.
-const CARD_VERSION = "1.3.0";
+const CARD_VERSION = "1.3.1";
 // eslint-disable-next-line no-console
 console.info(
   `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
@@ -74,10 +74,10 @@ const TRANSLATIONS = {
     layoutHorizontal: "Horizontal (wide)",
     forecastHigh: "Today's forecast high",
     tempSource: "Factor based on",
-    tempSourceForecastHigh: "Today's forecast high",
-    tempSourceCurrent: "Current temperature",
+    tempSourceForecastHigh: "Forecast high",
+    tempSourceCurrent: "Current temp.",
     effectiveFactor: (factor, temp, source) =>
-      `Factor ×${factor} from ${temp}° (${source})`,
+      `Factor ×${factor} from ${temp}° · ${source}`,
     timelineScaled: (factor) =>
       `Times include the weather factor ×${factor}`,
     schedule: "Schedule",
@@ -130,10 +130,10 @@ const TRANSLATIONS = {
     layoutHorizontal: "Horizontal (breit)",
     forecastHigh: "Tageshöchsttemperatur (Prognose)",
     tempSource: "Faktor basiert auf",
-    tempSourceForecastHigh: "Tageshöchstwert (Prognose)",
-    tempSourceCurrent: "Aktuelle Temperatur",
+    tempSourceForecastHigh: "Tageshöchstwert",
+    tempSourceCurrent: "Aktuelle Temp.",
     effectiveFactor: (factor, temp, source) =>
-      `Faktor ×${factor} aus ${temp}° (${source})`,
+      `Faktor ×${factor} aus ${temp}° · ${source}`,
     timelineScaled: (factor) =>
       `Zeiten inkl. Wetter-Faktor ×${factor}`,
     schedule: "Zeitplan",
