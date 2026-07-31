@@ -150,13 +150,26 @@
       weather_hot_temp: 30,
       weather_hot_factor: 2.0,
       weather_current_temp: 27,
-      weather_current_factor: 1.7,
+      // Since 1.3.0 the factor comes from the day's forecast high by
+      // default, not the current temperature - 31 deg -> x2.10 here, while
+      // the current 27 deg would only give x1.70.
+      weather_temp_source: "forecast_high",
+      weather_forecast_high: 31,
+      weather_effective_temp: 31,
+      weather_current_factor: 2.1,
       notify_target: null,
     };
     const recomputeEstimatedTotalSeconds = () => {
+      // estimated_* stays unscaled (the start-time overlap check uses it);
+      // scaled_* carries the weather factor, like the real integration.
       statusAttrs.estimated_total_seconds =
         statusAttrs.zones.reduce((sum, z) => sum + z.duration_minutes * 60, 0) +
         statusAttrs.pause_between_zones_seconds * Math.max(0, statusAttrs.zones.length - 1);
+      statusAttrs.scaled_total_seconds =
+        statusAttrs.zones.reduce(
+          (sum, z) => sum + Math.round(z.duration_minutes * 60 * (statusAttrs.weather_current_factor || 1)),
+          0
+        ) + statusAttrs.pause_between_zones_seconds * Math.max(0, statusAttrs.zones.length - 1);
     };
     recomputeEstimatedTotalSeconds();
 
@@ -242,7 +255,17 @@
           weather_reference_temp: data.reference_temp,
           weather_hot_temp: data.hot_temp,
           weather_hot_factor: data.hot_factor,
+          weather_temp_source: data.temp_source ?? statusAttrs.weather_temp_source,
         });
+        const useForecast = statusAttrs.weather_temp_source === "forecast_high";
+        statusAttrs.weather_effective_temp = useForecast
+          ? statusAttrs.weather_forecast_high
+          : statusAttrs.weather_current_temp;
+        const span = statusAttrs.weather_hot_temp - statusAttrs.weather_reference_temp;
+        statusAttrs.weather_current_factor = span
+          ? Math.max(0.1, Math.min(3, 1 + ((statusAttrs.weather_effective_temp - statusAttrs.weather_reference_temp) * (statusAttrs.weather_hot_factor - 1)) / span))
+          : 1;
+        recomputeEstimatedTotalSeconds();
       }
       if (service === "set_zone_order") {
         statusAttrs.zones = data.zones.map((id, i) => ({ ...zone(id), position: i }));
