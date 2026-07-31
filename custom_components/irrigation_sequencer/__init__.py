@@ -54,6 +54,7 @@ from .const import (
     SERVICE_SET_ZONE_ORDER,
     SERVICE_START_NOW,
     SERVICE_STOP,
+    WEATHER_TEMP_SOURCES,
 )
 from .manager import IrrigationSequencerManager
 
@@ -107,6 +108,7 @@ SET_WEATHER_ADJUSTMENT_SCHEMA = vol.Schema(
         vol.Required("reference_temp"): vol.Coerce(float),
         vol.Required("hot_temp"): vol.Coerce(float),
         vol.Required("hot_factor"): vol.Coerce(float),
+        vol.Optional("temp_source"): vol.In(WEATHER_TEMP_SOURCES),
     }
 )
 SET_WINTER_MODE_SCHEMA = vol.Schema(
@@ -326,6 +328,7 @@ def _async_register_services(hass: HomeAssistant) -> None:
             call.data["reference_temp"],
             call.data["hot_temp"],
             call.data["hot_factor"],
+            call.data.get("temp_source"),
         )
 
     async def handle_set_winter_mode(call: ServiceCall) -> None:

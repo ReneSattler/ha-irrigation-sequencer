@@ -17,7 +17,7 @@ const DOMAIN = "irrigation_sequencer";
 // browser console, whether an update actually took effect versus just
 // looking "the same" as before. Keep this in step with manifest.json's
 // "version" on every release.
-const CARD_VERSION = "1.2.12";
+const CARD_VERSION = "1.3.0";
 // eslint-disable-next-line no-console
 console.info(
   `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
@@ -73,6 +73,13 @@ const TRANSLATIONS = {
     layoutVertical: "Vertical (tall)",
     layoutHorizontal: "Horizontal (wide)",
     forecastHigh: "Today's forecast high",
+    tempSource: "Factor based on",
+    tempSourceForecastHigh: "Today's forecast high",
+    tempSourceCurrent: "Current temperature",
+    effectiveFactor: (factor, temp, source) =>
+      `Factor ×${factor} from ${temp}° (${source})`,
+    timelineScaled: (factor) =>
+      `Times include the weather factor ×${factor}`,
     schedule: "Schedule",
   },
   de: {
@@ -122,6 +129,13 @@ const TRANSLATIONS = {
     layoutVertical: "Vertikal (hoch)",
     layoutHorizontal: "Horizontal (breit)",
     forecastHigh: "Tageshöchsttemperatur (Prognose)",
+    tempSource: "Faktor basiert auf",
+    tempSourceForecastHigh: "Tageshöchstwert (Prognose)",
+    tempSourceCurrent: "Aktuelle Temperatur",
+    effectiveFactor: (factor, temp, source) =>
+      `Faktor ×${factor} aus ${temp}° (${source})`,
+    timelineScaled: (factor) =>
+      `Zeiten inkl. Wetter-Faktor ×${factor}`,
     schedule: "Zeitplan",
   },
 };
@@ -199,6 +213,13 @@ function linearFactor(temp, referenceTemp, hotTemp, hotFactor) {
   if (!span) return 1.0;
   const factor = 1.0 + ((temp - referenceTemp) * (hotFactor - 1.0)) / span;
   return Math.max(MIN_WEATHER_FACTOR, Math.min(MAX_WEATHER_FACTOR, factor));
+}
+
+/** Minutes with at most one decimal, without a trailing ".0" - a scaled
+ * duration is rarely a whole number, but "7.5 min" reads better than
+ * "7.5000000001 min" or a misleading rounded "8 min". */
+function formatMinutes(minutes) {
+  return (Math.round(minutes * 10) / 10).toString();
 }
 
 const FORECAST_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -452,10 +473,19 @@ class IrrigationSequencerBaseCard extends HTMLElement {
       if (isRunning && index === attrs.current_zone_index) cls = "zone-active";
       else if (lastIndex != null && index <= lastIndex && !(isPaused && index === lastIndex)) cls = "zone-done";
       const label = zoneDisplayName(this._hass, zone);
+      // Show what this zone will really run for. With a night schedule and
+      // a hot day the scaled value differs a lot from the configured one,
+      // so showing only the configured minutes here would contradict the
+      // bar widths right next to it.
+      const scaledMinutes = seconds / 60;
+      const durationText =
+        Math.abs(factor - 1) < 0.005
+          ? `${zone.duration_minutes} min`
+          : `${formatMinutes(scaledMinutes)} min (${zone.duration_minutes} × ${factor.toFixed(2)})`;
       segments.push({
         weight: seconds,
         cls,
-        title: `${index + 1}. ${label} · ${zone.duration_minutes} min`,
+        title: `${index + 1}. ${label} · ${durationText}`,
         label: index + 1,
       });
 
@@ -485,6 +515,11 @@ class IrrigationSequencerBaseCard extends HTMLElement {
         <span><i style="background: var(--success-color, #4caf50)"></i>${t.status.running}</span>
         <span><i style="background: var(--warning-color, #ff9800)"></i>${t.pauseBetweenZones}</span>
       </div>
+      ${
+        Math.abs(factor - 1) < 0.005
+          ? ""
+          : `<div class="timeline-note">${t.timelineScaled(factor.toFixed(2))}</div>`
+      }
     `;
   }
 
@@ -582,6 +617,7 @@ class IrrigationSequencerBaseCard extends HTMLElement {
       .segment.pause-active { background: var(--warning-color, #ff9800); animation: pulse-bg 1.2s ease-in-out infinite; }
       @keyframes pulse-bg { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.35); } }
       .timeline-legend { display: flex; gap: 14px; margin-top: 6px; font-size: 0.72em; color: var(--secondary-text-color); }
+      .timeline-note { margin-top: 4px; font-size: 0.72em; color: var(--secondary-text-color); font-style: italic; }
       .timeline-legend span { display: inline-flex; align-items: center; gap: 4px; }
       .timeline-legend i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
 
@@ -965,9 +1001,20 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
       ? Object.keys(this._hass.states).filter((id) => id.startsWith("weather."))
       : [];
     const enabled = !!attrs.weather_adjustment_enabled;
+    const sourceIsForecast =
+      (attrs.weather_temp_source ?? "forecast_high") === "forecast_high";
+    const sourceLabel = sourceIsForecast ? t.tempSourceForecastHigh : t.tempSourceCurrent;
+    // Show the temperature the factor is really derived from, not just the
+    // current one - with a night schedule those differ enormously, and
+    // showing only "current" is what made the old behaviour so misleading.
+    const effectiveTemp = attrs.weather_effective_temp ?? attrs.weather_current_temp;
     const currentFactorLabel =
-      enabled && attrs.weather_current_temp != null
-        ? `${t.currentFactor}: ×${attrs.weather_current_factor.toFixed(2)} (${attrs.weather_current_temp}°)`
+      enabled && effectiveTemp != null
+        ? t.effectiveFactor(
+            attrs.weather_current_factor.toFixed(2),
+            effectiveTemp,
+            sourceLabel
+          )
         : "";
 
     return `
@@ -999,6 +1046,16 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
                     )}</option>`
                 )
                 .join("")}
+            </select>
+          </div>
+        </div>
+        <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4)">
+          <div class="tile-row-icon"><ha-icon icon="mdi:thermometer-high"></ha-icon></div>
+          <div class="tile-row-label">${t.tempSource}</div>
+          <div class="tile-row-control">
+            <select id="weather-temp-source">
+              <option value="forecast_high" ${sourceIsForecast ? "selected" : ""}>${t.tempSourceForecastHigh}</option>
+              <option value="current" ${!sourceIsForecast ? "selected" : ""}>${t.tempSourceCurrent}</option>
             </select>
           </div>
         </div>
@@ -1137,11 +1194,17 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
       reference_temp: overrides.reference_temp ?? attrs.weather_reference_temp,
       hot_temp: overrides.hot_temp ?? attrs.weather_hot_temp,
       hot_factor: overrides.hot_factor ?? attrs.weather_hot_factor,
+      temp_source: overrides.temp_source ?? attrs.weather_temp_source ?? "forecast_high",
     });
 
     root.getElementById("weather-toggle")?.addEventListener("change", (e) => {
       this._releaseRenderSuppression(
         this._callService("set_weather_adjustment", readWeatherForm({ enabled: e.target.checked }))
+      );
+    });
+    root.getElementById("weather-temp-source")?.addEventListener("change", (e) => {
+      this._releaseRenderSuppression(
+        this._callService("set_weather_adjustment", readWeatherForm({ temp_source: e.target.value }))
       );
     });
     root.getElementById("weather-entity")?.addEventListener("change", (e) => {

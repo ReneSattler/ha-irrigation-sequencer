@@ -139,9 +139,11 @@ set_weather_adjustment:
   name: Set weather adjustment
   description: >-
     Configures temperature-based duration adjustment. The duration of every
-    zone is multiplied by a factor derived linearly from the current
-    temperature of the given weather entity: factor 1.0 at reference_temp,
-    hot_factor at hot_temp.
+    zone is multiplied by a factor derived linearly from a temperature of
+    the given weather entity: factor 1.0 at reference_temp, hot_factor at
+    hot_temp. By default the temperature used is the day's forecast high,
+    since runs are usually scheduled for the night, when the current
+    temperature says nothing about how hot the day will get.
   fields:
     entry_id:
       required: true
@@ -156,6 +158,17 @@ set_weather_adjustment:
       selector:
         entity:
           domain: weather
+    temp_source:
+      required: false
+      description: >-
+        Which temperature drives the factor: "forecast_high" (default) uses
+        the day's forecast high, "current" the current temperature. Falls
+        back to the current temperature if no forecast is available.
+      selector:
+        select:
+          options:
+            - forecast_high
+            - current
     reference_temp:
       required: true
       selector:

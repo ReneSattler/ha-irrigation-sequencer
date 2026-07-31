@@ -338,3 +338,76 @@ async def test_completion_notification_failure_does_not_raise(hass: HomeAssistan
     manager.notify_target = "mobile_app_missing"
 
     await manager._async_send_completion_notification(60)  # noqa: SLF001
+
+
+# --------------------------------------------------------------------- #
+# Weather temperature source (forecast high vs current)
+# --------------------------------------------------------------------- #
+
+
+async def test_factor_uses_forecast_high_not_current_temp(hass: HomeAssistant) -> None:
+    """The whole point of the feature: a run scheduled for 01:00 must scale
+    off how hot the *day* gets, not off the cold night it starts in. With
+    the defaults (1.0 at 20 deg, 2.0 at 30 deg) an 18 deg night would give
+    0.8x while the 37 deg day calls for 2.7x - watering least on the
+    hottest days, the exact inverse of the intent."""
+    manager = make_manager(hass)
+    hass.states.async_set("weather.home", "sunny", {"temperature": 18})
+    await manager.async_set_weather_adjustment(
+        True, "weather.home", 20.0, 30.0, 2.0, "forecast_high"
+    )
+    manager.weather_forecast_high = 37.0
+
+    assert manager.weather_effective_temp == 37.0
+    assert manager.weather_current_factor == pytest.approx(2.7)
+
+
+async def test_factor_uses_current_temp_when_source_is_current(
+    hass: HomeAssistant,
+) -> None:
+    manager = make_manager(hass)
+    hass.states.async_set("weather.home", "sunny", {"temperature": 18})
+    await manager.async_set_weather_adjustment(
+        True, "weather.home", 20.0, 30.0, 2.0, "current"
+    )
+    manager.weather_forecast_high = 37.0
+
+    assert manager.weather_effective_temp == 18
+    assert manager.weather_current_factor == pytest.approx(0.8)
+
+
+async def test_falls_back_to_current_temp_without_forecast(hass: HomeAssistant) -> None:
+    """Weather integrations without daily forecast support must still get a
+    sensible factor rather than none at all."""
+    manager = make_manager(hass)
+    hass.states.async_set("weather.home", "sunny", {"temperature": 25})
+    await manager.async_set_weather_adjustment(
+        True, "weather.home", 20.0, 30.0, 2.0, "forecast_high"
+    )
+    manager.weather_forecast_high = None
+
+    assert manager.weather_effective_temp == 25
+    assert manager.weather_current_factor == pytest.approx(1.5)
+
+
+async def test_forecast_high_defaults_to_forecast_source(hass: HomeAssistant) -> None:
+    manager = make_manager(hass)
+    assert manager.weather_temp_source == "forecast_high"
+
+
+async def test_scaled_total_applies_factor_but_estimate_does_not(
+    hass: HomeAssistant,
+) -> None:
+    """The card shows the scaled total, while the start-time overlap check
+    validates against the unscaled estimate - that check must not shift
+    with the weather, or previously accepted start times could silently
+    become invalid on a hot day."""
+    manager = make_manager(hass)  # 2 zones x 10 min, 120 s pause
+    hass.states.async_set("weather.home", "sunny", {"temperature": 18})
+    await manager.async_set_weather_adjustment(
+        True, "weather.home", 20.0, 30.0, 2.0, "forecast_high"
+    )
+    manager.weather_forecast_high = 30.0  # factor 2.0
+
+    assert manager.estimated_total_seconds == 10 * 60 * 2 + 120
+    assert manager.scaled_total_seconds == 10 * 60 * 2 * 2 + 120

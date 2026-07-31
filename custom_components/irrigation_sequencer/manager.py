@@ -8,7 +8,7 @@ from typing import Any, Callable
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers.event import async_track_time_change
+from homeassistant.helpers.event import async_track_time_change, async_track_time_interval
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
@@ -18,7 +18,9 @@ from .const import (
     DEFAULT_WEATHER_HOT_FACTOR,
     DEFAULT_WEATHER_HOT_TEMP,
     DEFAULT_WEATHER_REFERENCE_TEMP,
+    DEFAULT_WEATHER_TEMP_SOURCE,
     DEFAULT_ZONE_DURATION_MINUTES,
+    FORECAST_REFRESH_MINUTES,
     MAX_START_TIMES,
     MAX_WEATHER_FACTOR,
     MIN_START_TIMES,
@@ -31,6 +33,9 @@ from .const import (
     STATE_WINTER_MODE,
     STORAGE_KEY_PREFIX,
     STORAGE_VERSION,
+    WEATHER_TEMP_SOURCE_CURRENT,
+    WEATHER_TEMP_SOURCE_FORECAST_HIGH,
+    WEATHER_TEMP_SOURCES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -66,6 +71,12 @@ class IrrigationSequencerManager:
         self.weather_reference_temp: float = DEFAULT_WEATHER_REFERENCE_TEMP
         self.weather_hot_temp: float = DEFAULT_WEATHER_HOT_TEMP
         self.weather_hot_factor: float = DEFAULT_WEATHER_HOT_FACTOR
+        self.weather_temp_source: str = DEFAULT_WEATHER_TEMP_SOURCE
+        # Cached daily forecast high. Fetching it needs an async service
+        # call, but the factor is read from synchronous properties during a
+        # run, so it can't be fetched on demand there.
+        self.weather_forecast_high: float | None = None
+        self._unsub_forecast_refresh: Callable[[], None] | None = None
 
         self.status: str = STATE_IDLE
         self.current_zone_index: int | None = None
@@ -119,8 +130,25 @@ class IrrigationSequencerManager:
             )
             self.weather_hot_temp = data.get("weather_hot_temp", DEFAULT_WEATHER_HOT_TEMP)
             self.weather_hot_factor = data.get("weather_hot_factor", DEFAULT_WEATHER_HOT_FACTOR)
+            stored_source = data.get("weather_temp_source", DEFAULT_WEATHER_TEMP_SOURCE)
+            if stored_source in WEATHER_TEMP_SOURCES:
+                self.weather_temp_source = stored_source
 
         self._schedule_daily_trigger()
+        self._schedule_forecast_refresh()
+        await self.async_refresh_forecast()
+
+    @callback
+    def _schedule_forecast_refresh(self) -> None:
+        if self._unsub_forecast_refresh is not None:
+            self._unsub_forecast_refresh()
+
+        async def _refresh(_now) -> None:
+            await self.async_refresh_forecast()
+
+        self._unsub_forecast_refresh = async_track_time_interval(
+            self.hass, _refresh, timedelta(minutes=FORECAST_REFRESH_MINUTES)
+        )
 
     async def _async_save(self) -> None:
         await self._store.async_save(
@@ -136,6 +164,7 @@ class IrrigationSequencerManager:
                 "weather_reference_temp": self.weather_reference_temp,
                 "weather_hot_temp": self.weather_hot_temp,
                 "weather_hot_factor": self.weather_hot_factor,
+                "weather_temp_source": self.weather_temp_source,
             }
         )
 
@@ -156,6 +185,9 @@ class IrrigationSequencerManager:
         for unsub in self._unsub_daily_triggers:
             unsub()
         self._unsub_daily_triggers = []
+        if self._unsub_forecast_refresh is not None:
+            self._unsub_forecast_refresh()
+            self._unsub_forecast_refresh = None
         if self._run_task and not self._run_task.done():
             self._stop_requested = True
             await self._run_task
@@ -279,14 +311,21 @@ class IrrigationSequencerManager:
         reference_temp: float,
         hot_temp: float,
         hot_factor: float,
+        temp_source: str | None = None,
     ) -> None:
         self.weather_adjustment_enabled = enabled
         self.weather_entity = weather_entity or None
         self.weather_reference_temp = float(reference_temp)
         self.weather_hot_temp = float(hot_temp)
         self.weather_hot_factor = float(hot_factor)
+        if temp_source in WEATHER_TEMP_SOURCES:
+            self.weather_temp_source = temp_source
+        # The cached high belongs to the previous entity/source combination,
+        # so drop it rather than briefly scaling off the wrong number.
+        self.weather_forecast_high = None
         await self._async_save()
         self._notify_listeners()
+        await self.async_refresh_forecast()
 
     # ------------------------------------------------------------------ #
     # Weather-based duration factor
@@ -303,16 +342,70 @@ class IrrigationSequencerManager:
         temp = state.attributes.get("temperature")
         return float(temp) if temp is not None else None
 
+    async def async_refresh_forecast(self) -> None:
+        """Cache the daily forecast high for the day the run starts in.
+
+        Called on a timer (so the card shows a fresh number) and again
+        right before a sequence starts (so the run itself never scales off
+        a stale value). Entry 0 of the daily forecast is the current
+        calendar day, which for the typical night/early-morning schedule is
+        the day whose heat the watering is meant to cover.
+
+        Failures are swallowed deliberately: no forecast simply means
+        weather_effective_temp falls back to the current temperature, which
+        is strictly better than letting a weather integration hiccup break
+        the irrigation run.
+        """
+        if not self.weather_adjustment_enabled or not self.weather_entity:
+            return
+        if self.weather_temp_source != WEATHER_TEMP_SOURCE_FORECAST_HIGH:
+            return
+
+        try:
+            response = await self.hass.services.async_call(
+                "weather",
+                "get_forecasts",
+                {"type": "daily"},
+                target={"entity_id": self.weather_entity},
+                blocking=True,
+                return_response=True,
+            )
+            forecast = (response or {}).get(self.weather_entity, {}).get("forecast") or []
+            high = forecast[0].get("temperature") if forecast else None
+            new_high = float(high) if high is not None else None
+        except Exception as err:  # noqa: BLE001 - never break a run over this
+            _LOGGER.debug("Could not fetch forecast for %s: %s", self.weather_entity, err)
+            return
+
+        if new_high != self.weather_forecast_high:
+            self.weather_forecast_high = new_high
+            self._notify_listeners()
+
+    @property
+    def weather_effective_temp(self) -> float | None:
+        """The temperature the factor is actually derived from.
+
+        Falls back to the current temperature when the forecast high is
+        selected but unavailable (weather integration without forecast
+        support, or a failed/not-yet-completed fetch)."""
+        if self.weather_temp_source == WEATHER_TEMP_SOURCE_FORECAST_HIGH:
+            if self.weather_forecast_high is not None:
+                return self.weather_forecast_high
+        return self.weather_current_temp
+
     @property
     def weather_current_factor(self) -> float:
-        """Linear factor derived from the current temperature.
+        """The factor applied to every zone's duration.
 
         factor(reference_temp) = 1.0, factor(hot_temp) = hot_factor, extrapolated
         linearly beyond those two points and clamped to a sane range.
+        Derived from weather_effective_temp - despite the attribute name,
+        that is not necessarily the *current* temperature (see
+        WEATHER_TEMP_SOURCE_* in const.py).
         """
         if not self.weather_adjustment_enabled:
             return 1.0
-        temp = self.weather_current_temp
+        temp = self.weather_effective_temp
         if temp is None:
             return 1.0
 
@@ -417,7 +510,20 @@ class IrrigationSequencerManager:
             self.pause_between_zones_seconds * max(0, len(self.zones) - 1)
         )
 
+    @property
+    def scaled_total_seconds(self) -> int:
+        """Run time with the weather factor applied - what the sequence will
+        really take, and what the card's timeline shows. Deliberately
+        separate from estimated_total_seconds, which stays unscaled because
+        the start-time overlap check is validated against it and must not
+        shift with the weather."""
+        return sum(self._zone_duration_seconds(zone) for zone in self.zones) + (
+            self.pause_between_zones_seconds * max(0, len(self.zones) - 1)
+        )
+
     async def _async_run_sequence(self) -> None:
+        # Never scale the run off a stale forecast.
+        await self.async_refresh_forecast()
         total_seconds = sum(
             self._zone_duration_seconds(zone) for zone in self.zones
         ) + self.pause_between_zones_seconds * max(0, len(self.zones) - 1)

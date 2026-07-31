@@ -5,6 +5,43 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.3.0] - 2026-07-31
+
+- **Fixed a significant watering bug**: the weather factor was derived from
+  the *current* temperature, which for the typical night or early-morning
+  schedule is the coldest moment of the day and says nothing about how hot
+  the day will get. With the defaults (1.0 at 20 °C, 2.0 at 30 °C), a 37 °C
+  day with a 01:00 run applied **0.8x instead of 2.7x** - watering least on
+  the hottest days, the exact inverse of the feature's intent. The forecast
+  high was already fetched and displayed on the card, but never reached the
+  duration calculation (`grep -c forecast manager.py` was 0).
+
+  The factor is now derived from the day's forecast high by default. The
+  daily forecast's first entry covers the day the run starts in, which is
+  the relevant one for a night schedule. A new **"Factor based on"** setting
+  in the settings card switches back to the current temperature if wanted,
+  and the current temperature is also used automatically as a fallback when
+  the weather integration provides no forecast.
+
+  The forecast is cached, refreshed every 30 minutes for the display, and
+  re-fetched unconditionally right before each run so a sequence never
+  scales off a stale value. A failing forecast fetch never breaks a run.
+
+- **The timeline now shows the times that will actually run.** Zone tooltips
+  show the scaled duration with the calculation behind it
+  (`27 min (12 × 2.25)`), and a note under the legend spells out that the
+  times include the weather factor. Previously the bar widths were scaled
+  while the tooltips showed the configured base minutes, which contradicted
+  each other.
+
+- New state attributes: `weather_temp_source`, `weather_forecast_high`,
+  `weather_effective_temp` (the temperature the factor is really derived
+  from) and `scaled_total_seconds` (run time including the factor).
+  `estimated_total_seconds` deliberately stays unscaled - the start-time
+  overlap check validates against it and must not shift with the weather.
+  `weather_current_factor` keeps its name for compatibility with
+  already-installed cards, but now means "the factor that will be applied".
+
 ## [1.2.12] - 2026-07-31
 
 - Documentation only: added the failure mode that cost the most time to
