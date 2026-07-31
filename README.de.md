@@ -128,6 +128,14 @@ manuelle Lovelace-Ressource nötig.
 > dann neu öffnen. Ab dann sollte das bei künftigen Updates nicht mehr
 > nötig sein.
 >
+> **Cards fehlen auch nach Neustart und geleertem Cache weiterhin?**
+> Prüfe unter **Einstellungen → Dashboards → Ressourcen**, ob ein Eintrag
+> auf `irrigation-sequencer-card.js` existiert. Der wird normalerweise
+> automatisch angelegt. Fehlt er, verwaltet deine Instanz die
+> Lovelace-Ressourcen vermutlich über YAML - die Integration schreibt in
+> dem Fall eine Warnung mit der exakten URL ins Log, die du dann manuell
+> als **JavaScript-Modul** hinzufügen kannst.
+>
 > **Cards zeigen "Konfigurationsfehler" oder verschwinden, nachdem du eine
 > Zone hinzugefügt/entfernt hast?** Das Hinzufügen einer Zone lädt den
 > Konfigurationseintrag der Integration neu, und ein Tab, der vorher schon

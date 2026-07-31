@@ -5,6 +5,19 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.2.9] - 2026-07-23
+
+- Fixed: on a fresh install where the Lovelace resource couldn't be
+  registered (e.g. instances managing resources via YAML), v1.2.8 silently
+  did nothing and - having removed the old `add_extra_js_url()` path
+  entirely - never delivered the card at all, so both cards were missing
+  from the card picker with no entry under Settings → Dashboards →
+  Resources and nothing in the log. Now falls back to `add_extra_js_url()`
+  in that case (cache-staleness downside, but a card that loads beats one
+  that doesn't) and logs a warning naming the exact URL to add manually if
+  needed. Reported from a second, independent instance. Added regression
+  tests for both the detection and the fallback.
+
 ## [1.2.8] - 2026-07-23
 
 - Fixed: after every release, the dashboard showed "Custom element doesn't
