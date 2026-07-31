@@ -5,6 +5,30 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.2.10] - 2026-07-23
+
+- Hardening after a report from a second instance where neither the
+  Lovelace resource nor the cards showed up on v1.2.9 (the same version
+  registers the resource correctly on the maintainer's instance, so the
+  mechanism itself works - the actual cause on that instance is still
+  unconfirmed and needs its log). Closed the robustness gaps that produce
+  exactly that symptom:
+  - `LOVELACE_DATA` / `ResourceStorageCollection` were imported at module
+    scope. They are not a stable public API and have moved between core
+    versions; on a version where the import fails, the whole integration
+    failed to load - no entities, no services, no cards, no fallback.
+    Now imported defensively.
+  - An exception from the registration call propagated out of
+    `async_setup()` and aborted setup entirely. Now caught and logged,
+    with the `add_extra_js_url()` fallback taking over.
+  - `lovelace` moved from `dependencies` to `after_dependencies`, so a
+    lovelace problem can't take this integration down with it.
+    (`frontend` stays a hard dependency - the fallback needs it.)
+  - The fallback warning no longer claims YAML resource mode as the cause,
+    since that is only one of several possibilities.
+- Documented the manual workaround (adding the resource URL by hand) in
+  both READMEs.
+
 ## [1.2.9] - 2026-07-23
 
 - Fixed: on a fresh install where the Lovelace resource couldn't be
