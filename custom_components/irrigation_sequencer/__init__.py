@@ -3,11 +3,13 @@ pauses, night start, winter mode, rain pause and weather-based duration
 adjustment."""
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import voluptuous as vol
 from aiohttp import web
 
+from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.components.lovelace.const import LOVELACE_DATA
 from homeassistant.components.lovelace.resources import ResourceStorageCollection
@@ -16,6 +18,8 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
+
+_LOGGER = logging.getLogger(__name__)
 
 from .const import (
     CONF_ZONE_ENTITIES,
@@ -136,10 +140,10 @@ class _CardFileView(HomeAssistantView):
         )
 
 
-async def _async_ensure_lovelace_resource(hass: HomeAssistant, version: str) -> None:
+async def _async_ensure_lovelace_resource(hass: HomeAssistant, version: str) -> bool:
     """Register (or update, on a version change) a Lovelace resource entry
     for the card, instead of the frontend.add_extra_js_url() helper this
-    used before v1.2.8.
+    used before v1.2.8. Returns True if the resource is in place.
 
     add_extra_js_url() bakes the <script> reference directly into the
     server-rendered index page. A stale cached copy of that page (Home
@@ -153,16 +157,17 @@ async def _async_ensure_lovelace_resource(hass: HomeAssistant, version: str) -> 
     list is fetched dynamically over the websocket connection on every
     dashboard load rather than baked into any static, cacheable page -
     the same delivery mechanism every other HACS frontend card relies on,
-    which doesn't have this staleness problem. Skips silently if this
+    which doesn't have this staleness problem. Returns False if this
     instance manages resources via YAML (resource_mode: yaml in
-    configuration.yaml) - that collection is read-only from here, and a
-    user in that mode is already managing resources by hand.
+    configuration.yaml), or if the lovelace component isn't set up in a
+    way we can write to - the caller then falls back to add_extra_js_url()
+    so the card still loads either way.
     """
     lovelace_data = hass.data.get(LOVELACE_DATA)
     if lovelace_data is None or not isinstance(
         lovelace_data.resources, ResourceStorageCollection
     ):
-        return
+        return False
 
     resources = lovelace_data.resources
     await resources.async_get_info()  # ensures the collection is loaded
@@ -177,6 +182,7 @@ async def _async_ensure_lovelace_resource(hass: HomeAssistant, version: str) -> 
         await resources.async_create_item({"res_type": "module", "url": new_url})
     elif existing["url"] != new_url:
         await resources.async_update_item(existing["id"], {"url": new_url})
+    return True
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -186,7 +192,25 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     card_path = Path(integration.file_path) / "frontend" / CARD_FILENAME
     content = await hass.async_add_executor_job(card_path.read_bytes)
     hass.http.register_view(_CardFileView(content))
-    await _async_ensure_lovelace_resource(hass, integration.version)
+
+    card_url = f"{FRONTEND_URL_BASE}/{CARD_FILENAME}?v={integration.version}"
+    if await _async_ensure_lovelace_resource(hass, integration.version):
+        _LOGGER.debug("Registered Lovelace resource for the card: %s", card_url)
+    else:
+        # Instances in YAML resource mode (or with lovelace set up in a way
+        # we can't write resources to) still need the card delivered
+        # somehow. add_extra_js_url has the cache-staleness downside this
+        # release moved away from, but a card that loads with an occasional
+        # manual cache clear beats one that never loads at all.
+        add_extra_js_url(hass, card_url)
+        _LOGGER.warning(
+            "Could not register a Lovelace resource for the Irrigation Sequencer "
+            "card (this instance appears to manage Lovelace resources via YAML). "
+            "Falling back to injecting the card into the frontend directly. If the "
+            "cards don't show up in the card picker, add %s manually as a "
+            "JavaScript module under Settings > Dashboards > Resources.",
+            card_url,
+        )
     return True
 
 

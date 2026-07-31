@@ -115,6 +115,13 @@ and no Lovelace resource to add by hand, on either install path.
 > app's cache/storage in your phone's app settings), then reopen. From then
 > on, updates shouldn't need this again.
 >
+> **Cards still missing after a restart, even with a cleared cache?**
+> Check **Settings → Dashboards → Resources** for an entry ending in
+> `irrigation-sequencer-card.js`. It should be created automatically. If
+> it isn't there, your instance likely manages Lovelace resources via YAML
+> - the integration logs a warning naming the exact URL in that case, and
+> you can add it manually as a **JavaScript module**.
+>
 > **Cards show "Configuration error" or vanish after adding/removing a
 > zone?** Adding a zone reloads the integration's config entry, and a tab
 > that was open beforehand can briefly render against a stale mix of old
