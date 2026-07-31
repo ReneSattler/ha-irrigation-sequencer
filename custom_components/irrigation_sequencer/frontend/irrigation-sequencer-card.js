@@ -22,7 +22,7 @@ const DEFAULT_ZONE_DURATION_MINUTES = 10;
 // browser console, whether an update actually took effect versus just
 // looking "the same" as before. Keep this in step with manifest.json's
 // "version" on every release.
-const CARD_VERSION = "1.4.1";
+const CARD_VERSION = "1.4.2";
 // eslint-disable-next-line no-console
 console.info(
   `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
@@ -62,6 +62,7 @@ const TRANSLATIONS = {
     hotTemp: "Hot temp.",
     hotFactor: "Factor at hot temp.",
     currentFactor: "Current factor",
+    currentTemp: "Current temperature",
     start: "Start now",
     stop: "Stop",
     nextRun: "Next run",
@@ -120,6 +121,7 @@ const TRANSLATIONS = {
     hotTemp: "Hitzetemp.",
     hotFactor: "Faktor bei Hitzetemp.",
     currentFactor: "Aktueller Faktor",
+    currentTemp: "Aktuelle Temperatur",
     start: "Jetzt starten",
     stop: "Stoppen",
     nextRun: "Nächster Lauf",
@@ -562,14 +564,22 @@ class IrrigationSequencerBaseCard extends HTMLElement {
 
   _renderForecastStat(attrs, t) {
     if (!attrs.weather_adjustment_enabled || !attrs.weather_entity) return "";
-    const high = this._forecastHighFor(attrs.weather_entity);
+    // Prefer the value the integration itself resolved - that is the one the
+    // run will actually scale off. Only fall back to fetching it in the
+    // browser for backends older than 1.3.0.
+    const backendHigh = attrs.weather_forecast_high;
+    const high = backendHigh != null ? backendHigh : this._forecastHighFor(attrs.weather_entity);
     if (high == null) return "";
-    const factor = linearFactor(
-      high,
-      attrs.weather_reference_temp,
-      attrs.weather_hot_temp,
-      attrs.weather_hot_factor
-    );
+    const usesForecast = (attrs.weather_temp_source ?? "forecast_high") === "forecast_high";
+    const factor =
+      backendHigh != null && usesForecast
+        ? attrs.weather_current_factor
+        : linearFactor(
+            high,
+            attrs.weather_reference_temp,
+            attrs.weather_hot_temp,
+            attrs.weather_hot_factor
+          );
     return `
       <div class="stat" style="--tile-color: var(--warning-color, #ff9800)">
         <ha-icon icon="mdi:thermometer-high"></ha-icon>
@@ -755,13 +765,26 @@ class IrrigationSequencerStatusCard extends IrrigationSequencerBaseCard {
         </div>
         ${
           attrs.weather_adjustment_enabled && attrs.weather_current_temp != null
-            ? `<div class="stat" style="--tile-color: var(--primary-color)">
+            ? (() => {
+                // Only pair the current temperature with the factor when it
+                // is actually what the factor is derived from. With the
+                // forecast high driving it, showing "32° · ×2.71" next to a
+                // "37.1° · ×2.71" tile implies 32° produces 2.71 - it
+                // doesn't, and both tiles claiming the same factor from
+                // different temperatures is just confusing.
+                const drivesFactor =
+                  (attrs.weather_temp_source ?? "forecast_high") !== "forecast_high";
+                const value = drivesFactor
+                  ? `${attrs.weather_current_temp}° · ×${attrs.weather_current_factor.toFixed(2)}`
+                  : `${attrs.weather_current_temp}°`;
+                return `<div class="stat" style="--tile-color: var(--primary-color)">
                 <ha-icon icon="mdi:weather-partly-cloudy"></ha-icon>
                 <div>
-                  <div class="stat-value">${attrs.weather_current_temp}° · ×${attrs.weather_current_factor.toFixed(2)}</div>
-                  <div class="stat-label">${t.currentFactor}</div>
+                  <div class="stat-value">${value}</div>
+                  <div class="stat-label">${drivesFactor ? t.currentFactor : t.currentTemp}</div>
                 </div>
-              </div>`
+              </div>`;
+              })()
             : ""
         }
         ${this._renderForecastStat(attrs, t)}

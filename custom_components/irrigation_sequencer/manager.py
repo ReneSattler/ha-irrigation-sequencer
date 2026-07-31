@@ -9,6 +9,7 @@ from typing import Any, Callable
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.event import async_track_time_change, async_track_time_interval
+from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
@@ -136,7 +137,17 @@ class IrrigationSequencerManager:
 
         self._schedule_daily_trigger()
         self._schedule_forecast_refresh()
-        await self.async_refresh_forecast()
+
+        # Don't fetch during setup: weather integrations are often not up
+        # yet at that point, and calling weather.get_forecasts against an
+        # entity that doesn't exist yet makes Home Assistant log
+        # "Referenced entities ... are missing or not currently available"
+        # - our warning, in the user's log, for a fetch that was never
+        # going to succeed. Wait until startup has finished instead.
+        async def _initial_forecast(_hass) -> None:
+            await self.async_refresh_forecast()
+
+        async_at_started(self.hass, _initial_forecast)
 
     @callback
     def _schedule_forecast_refresh(self) -> None:
@@ -359,6 +370,8 @@ class IrrigationSequencerManager:
         if not self.weather_adjustment_enabled or not self.weather_entity:
             return
         if self.weather_temp_source != WEATHER_TEMP_SOURCE_FORECAST_HIGH:
+            return
+        if self.hass.states.get(self.weather_entity) is None:
             return
 
         try:

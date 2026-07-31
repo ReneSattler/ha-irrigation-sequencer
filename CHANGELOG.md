@@ -5,6 +5,25 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.4.2] - 2026-07-31
+
+- Fixed a warning this integration caused at every startup: the initial
+  forecast fetch ran during setup, when weather integrations frequently
+  aren't up yet, so Home Assistant logged *"Referenced entities
+  weather.... are missing or not currently available"* for a call that was
+  never going to succeed - and the forecast stayed unset until the
+  30-minute timer fired. The initial fetch now waits for startup to
+  finish, and is skipped entirely while the weather entity has no state.
+- Fixed a misleading status tile: with the forecast high driving the
+  factor, the card showed `32 deg / x2.71 / Current factor` right above
+  `37.1 deg / x2.71 / Today's forecast high`. The 2.71 comes from 37.1
+  deg, not from 32 deg. The current-temperature tile now only shows a
+  factor when the current temperature is actually the configured source,
+  and is labelled "Current temperature" otherwise.
+- The forecast tile now prefers the value the integration resolved over
+  re-fetching and re-deriving it in the browser, so the card and the run
+  can't disagree.
+
 ## [1.4.1] - 2026-07-31
 
 - The status card now shows the run's **total duration** - the piece the
