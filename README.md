@@ -226,6 +226,27 @@ automations:
 You can find the `entry_id` as an attribute on the integration's status
 sensor.
 
+## Troubleshooting
+
+**A zone always stops after the same fixed duration, no matter what you
+configure or what the weather factor computes?** This looks like a bug in
+the scaling, but check the physical device first - especially with Shelly
+relays. Many of them have a built-in **"Auto off"** timer (Shelly app/cloud
+→ device → the timer/clock tab → "Auto off") that switches the relay off on
+its own, entirely independent of Home Assistant. It's easy to end up with
+this enabled - e.g. at 6 minutes as a safety net from an earlier, manual
+automation - and then forget about it once zone durations grow past that
+with weather-based scaling turned on.
+
+Since v1.4.4, every zone start/finish is logged at `info` level (base
+duration, factor used, effective temperature, target vs. actual elapsed
+seconds), and the status sensor exposes a `last_run_zones` attribute with
+the same details plus `external_off_detected_at_seconds` - set the moment
+the zone entity itself reports "off" while the sequence still expects it
+on, which is the direct signature of exactly this kind of device-side
+cutoff. Check both if a run's actual duration doesn't match what the card
+predicted.
+
 ## Development
 
 Backend logic (`custom_components/irrigation_sequencer/manager.py`) has a
