@@ -92,6 +92,9 @@ class IrrigationSequencerManager:
         self._stop_requested = False
         self._unsub_daily_triggers: list[Callable[[], None]] = []
         self._listeners: list[Callable[[], None]] = []
+        # What actually happened in the most recent run, one entry per zone,
+        # appended live as each zone finishes - see _async_run_sequence.
+        self.last_run_zones: list[dict[str, Any]] = []
 
     # ------------------------------------------------------------------ #
     # Setup / persistence
@@ -564,6 +567,17 @@ class IrrigationSequencerManager:
         planned = list(self.zones)
         self.seconds_remaining_total = self._remaining_after(-1, 0, include_next_pause=False)
         run_elapsed = 0
+        self.last_run_zones = []
+        _LOGGER.info(
+            "Irrigation run starting: %d zone(s), weather_adjustment_enabled=%s "
+            "factor=%.3f effective_temp=%s forecast_high=%s current_temp=%s",
+            len(planned),
+            self.weather_adjustment_enabled,
+            self.weather_current_factor,
+            self.weather_effective_temp,
+            self.weather_forecast_high,
+            self.weather_current_temp,
+        )
 
         try:
             for index, planned_zone in enumerate(planned):
@@ -575,25 +589,58 @@ class IrrigationSequencerManager:
                 self.last_zone_index = index
                 self.status = STATE_RUNNING
                 zone_elapsed = 0
-                self.seconds_remaining_zone = self._zone_seconds_for(entity_id)
+                target_at_start = self._zone_seconds_for(entity_id)
+                factor_at_start = self.weather_current_factor
+                self.seconds_remaining_zone = target_at_start
                 self.seconds_remaining_total = self._remaining_after(
                     index, self.seconds_remaining_zone, include_next_pause=True
                 )
                 self._notify_listeners()
+                _LOGGER.info(
+                    "Zone %s starting: base=%dmin factor=%.3f effective_temp=%s target=%ds",
+                    entity_id,
+                    planned_zone["duration_minutes"],
+                    factor_at_start,
+                    self.weather_effective_temp,
+                    target_at_start,
+                )
 
                 await self._async_set_valve(entity_id, True)
+                expected_on_state = "open" if entity_id.startswith("valve.") else "on"
+                external_off_at: int | None = None
                 # Tick once per second (instead of one long sleep) so the
                 # countdown stays live, a stop request is picked up quickly,
                 # and - re-reading the target every pass - a duration edited
                 # mid-run applies immediately, ending the zone at once if the
                 # new value is already behind us.
+                final_target = target_at_start
                 while not self._stop_requested:
-                    target = self._zone_seconds_for(entity_id)
-                    if zone_elapsed >= target:
+                    final_target = self._zone_seconds_for(entity_id)
+                    if zone_elapsed >= final_target:
                         break
                     await asyncio.sleep(1)
                     zone_elapsed += 1
                     run_elapsed += 1
+                    # We only ever *command* this entity here - nothing reads
+                    # its live state back, so a device that switches itself
+                    # off on its own (e.g. a relay's own auto-off timer)
+                    # would otherwise go completely unnoticed: the loop just
+                    # keeps counting against a device that's already off.
+                    if external_off_at is None:
+                        live_state = self.hass.states.get(entity_id)
+                        if live_state is not None and live_state.state != expected_on_state:
+                            external_off_at = zone_elapsed
+                            _LOGGER.warning(
+                                "Zone %s reports state '%s' after %ds even though this "
+                                "sequence still expects it %s for %ds more - the device "
+                                "may be turning itself off on its own (e.g. a built-in "
+                                "auto-off timer), independent of this integration.",
+                                entity_id,
+                                live_state.state,
+                                zone_elapsed,
+                                expected_on_state,
+                                final_target - zone_elapsed,
+                            )
                     self.seconds_remaining_zone = max(
                         0, self._zone_seconds_for(entity_id) - zone_elapsed
                     )
@@ -602,6 +649,29 @@ class IrrigationSequencerManager:
                     )
                     self._notify_listeners()
                 await self._async_set_valve(entity_id, False)
+                _LOGGER.info(
+                    "Zone %s finished: elapsed=%ds target_at_start=%ds target_at_finish=%ds "
+                    "external_off_detected_at=%s stopped_early=%s",
+                    entity_id,
+                    zone_elapsed,
+                    target_at_start,
+                    final_target,
+                    external_off_at,
+                    self._stop_requested,
+                )
+                self.last_run_zones.append(
+                    {
+                        "entity_id": entity_id,
+                        "duration_minutes": planned_zone["duration_minutes"],
+                        "factor_at_start": factor_at_start,
+                        "target_seconds_at_start": target_at_start,
+                        "target_seconds_at_finish": final_target,
+                        "actual_elapsed_seconds": zone_elapsed,
+                        "external_off_detected_at_seconds": external_off_at,
+                        "stopped_early": self._stop_requested,
+                    }
+                )
+                self._notify_listeners()
 
                 if self._stop_requested:
                     break
