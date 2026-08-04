@@ -22,7 +22,7 @@ const DEFAULT_ZONE_DURATION_MINUTES = 10;
 // browser console, whether an update actually took effect versus just
 // looking "the same" as before. Keep this in step with manifest.json's
 // "version" on every release.
-const CARD_VERSION = "1.4.5";
+const CARD_VERSION = "1.4.6";
 // eslint-disable-next-line no-console
 console.info(
   `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
@@ -682,6 +682,7 @@ class IrrigationSequencerBaseCard extends HTMLElement {
       .layout-horizontal .status-columns .timeline-col { flex: 1.4; min-width: 0; }
       .layout-horizontal .status-columns .stats-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
       .layout-horizontal .stat-row { flex-direction: column; margin-top: 0; }
+      .layout-horizontal .stat-row .stat { flex: 0 0 auto; }
       .layout-horizontal .zones-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
       .layout-horizontal .settings-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; align-items: start; }
       .layout-horizontal .zones-grid .tile-row,
