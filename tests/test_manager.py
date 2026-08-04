@@ -487,3 +487,28 @@ async def test_remaining_total_reflects_current_config(hass: HomeAssistant) -> N
 
     await manager.async_set_zone_duration("switch.zone_2", 5)
     assert manager._remaining_after(0, 600, include_next_pause=True) == 600 + 300 + 120
+
+
+async def test_last_run_zones_persists_across_reload(hass: HomeAssistant) -> None:
+    """The runs worth inspecting last_run_zones for are the automatic,
+    scheduled ones - typically at night, with nobody watching. It has to
+    survive a restart that happens to land between that run finishing and
+    someone actually checking the attribute, not just live in memory."""
+    manager = make_manager(hass, ["switch.zone_1"])
+    manager.zones[0]["duration_minutes"] = 1
+
+    async def fake_set_valve(entity_id, on):
+        pass
+
+    manager._async_set_valve = fake_set_valve
+
+    with patch("asyncio.sleep", _instant_sleep):
+        await asyncio.wait_for(manager._async_run_sequence(), timeout=5)
+
+    assert len(manager.last_run_zones) == 1
+    assert manager.last_run_zones[0]["entity_id"] == "switch.zone_1"
+    assert manager.last_run_zones[0]["actual_elapsed_seconds"] == 60
+
+    reloaded = make_manager(hass, ["switch.zone_1"])
+    await reloaded.async_load()
+    assert reloaded.last_run_zones == manager.last_run_zones
