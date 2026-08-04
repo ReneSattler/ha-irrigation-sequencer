@@ -110,6 +110,11 @@ ATTR_WEATHER_EFFECTIVE_TEMP = "weather_effective_temp"
 # unscaled because the start-time overlap check is validated against it.
 ATTR_SCALED_TOTAL_SECONDS = "scaled_total_seconds"
 ATTR_NOTIFY_TARGET = "notify_target"
+# Per-zone record of what actually happened in the most recent run - the
+# factor/target the code computed at zone start vs. how long the zone was
+# really on for, so a mismatch (e.g. a device cutting itself off early) is
+# visible without digging through logs.
+ATTR_LAST_RUN_ZONES = "last_run_zones"
 
 # Notification sent after a completed run, when a notify target is
 # configured. Keyed by hass.config.language, same pattern as
