@@ -11,6 +11,7 @@ from .const import (
     ATTR_CURRENT_ZONE_ENTITY_ID,
     ATTR_CURRENT_ZONE_INDEX,
     ATTR_ESTIMATED_TOTAL_SECONDS,
+    ATTR_LAST_RUN_ZONES,
     ATTR_LAST_ZONE_INDEX,
     ATTR_NEXT_RUN,
     ATTR_NOTIFY_TARGET,
@@ -102,4 +103,5 @@ class IrrigationSequencerStatusSensor(Entity):
             ATTR_WEATHER_FORECAST_HIGH: self._manager.weather_forecast_high,
             ATTR_WEATHER_EFFECTIVE_TEMP: self._manager.weather_effective_temp,
             ATTR_SCALED_TOTAL_SECONDS: self._manager.scaled_total_seconds,
+            ATTR_LAST_RUN_ZONES: self._manager.last_run_zones,
         }
