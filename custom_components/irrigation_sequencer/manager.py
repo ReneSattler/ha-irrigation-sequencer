@@ -138,6 +138,12 @@ class IrrigationSequencerManager:
             if stored_source in WEATHER_TEMP_SOURCES:
                 self.weather_temp_source = stored_source
 
+            # Survives a restart deliberately: the runs worth inspecting this
+            # for are the automatic, scheduled ones, and there's no
+            # guarantee nobody restarts HA (an update, a crash) between one
+            # finishing and someone actually checking the attribute.
+            self.last_run_zones = data.get("last_run_zones", [])
+
         self._schedule_daily_trigger()
         self._schedule_forecast_refresh()
 
@@ -179,6 +185,7 @@ class IrrigationSequencerManager:
                 "weather_hot_temp": self.weather_hot_temp,
                 "weather_hot_factor": self.weather_hot_factor,
                 "weather_temp_source": self.weather_temp_source,
+                "last_run_zones": self.last_run_zones,
             }
         )
 
@@ -671,6 +678,7 @@ class IrrigationSequencerManager:
                         "stopped_early": self._stop_requested,
                     }
                 )
+                await self._async_save()
                 self._notify_listeners()
 
                 if self._stop_requested:
