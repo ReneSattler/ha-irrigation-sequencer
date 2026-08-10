@@ -8,15 +8,20 @@ name: HA install smoke test
 # doesn't actually complete, or the frontend card not being served once a
 # config entry exists.
 #
-# Manual only (Actions tab -> this workflow -> "Run workflow") plus an
-# automatic run whenever a release is published, so a bad release is caught
-# right after publishing instead of only whenever someone happens to click
-# the button.
+# Runs manually (Actions tab -> this workflow -> "Run workflow"), whenever a
+# release is published (so a bad release is caught right after publishing),
+# and once a month on its own - the :stable image tag is a moving target, so
+# even with no release on our side, a Home Assistant Core update could break
+# this integration between releases. Monthly is enough to catch that without
+# needing to watch for it; the 10th rather than the 1st mostly just avoids
+# piling onto everyone else's month-start cron jobs.
 
 on:
   workflow_dispatch:
   release:
     types: [published]
+  schedule:
+    - cron: "0 6 10 * *"
 
 jobs:
   smoke-test:
