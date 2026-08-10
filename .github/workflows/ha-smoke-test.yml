@@ -1,0 +1,149 @@
+name: HA install smoke test
+
+# Boots a real Home Assistant container (not the mocked test harness used by
+# tests/), copies this repo's integration into it exactly as HACS would,
+# and drives the actual onboarding + config flow APIs to install it - the
+# same steps a real user's browser performs. Catches the class of bug the
+# pytest suite's mocked HA can't: a broken manifest, a config flow that
+# doesn't actually complete, or the frontend card not being served once a
+# config entry exists.
+#
+# Manual only (Actions tab -> this workflow -> "Run workflow") plus an
+# automatic run whenever a release is published, so a bad release is caught
+# right after publishing instead of only whenever someone happens to click
+# the button.
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up a Home Assistant config directory
+        run: |
+          mkdir -p ha-config/custom_components
+          cp -r custom_components/irrigation_sequencer ha-config/custom_components/
+          cat > ha-config/configuration.yaml <<'YAML'
+          default_config:
+          demo:
+          logger:
+            default: warning
+            logs:
+              custom_components.irrigation_sequencer: debug
+          YAML
+
+      - name: Start Home Assistant
+        run: |
+          docker run -d --name ha \
+            -v "${{ github.workspace }}/ha-config:/config" \
+            -p 8123:8123 \
+            ghcr.io/home-assistant/home-assistant:stable
+
+      - name: Wait for Home Assistant to come up
+        run: |
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8123/ || true)
+            if [ "$code" = "200" ] || [ "$code" = "302" ]; then
+              echo "Home Assistant responding ($code) after $((i*3))s"
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "::error::Home Assistant never came up"
+              docker logs ha
+              exit 1
+            fi
+            sleep 3
+          done
+          sleep 10  # let component setup after the initial response settle
+
+      - name: Fail if irrigation_sequencer logged an error while loading
+        run: |
+          docker logs ha 2>&1 | tee ha-boot.log
+          if grep -Ei "(error|exception)[^$]*irrigation_sequencer|irrigation_sequencer[^$]*(error|exception)" ha-boot.log; then
+            echo "::error::irrigation_sequencer logged an error/exception during startup"
+            exit 1
+          fi
+
+      - name: Complete onboarding
+        id: onboarding
+        run: |
+          set -e
+          AUTH_CODE=$(curl -sf -X POST http://localhost:8123/api/onboarding/users \
+            -H "Content-Type: application/json" \
+            -d '{"client_id":"http://localhost:8123/","name":"CI","username":"ci","password":"ci-password-not-secret","language":"en"}' \
+            | grep -o '"auth_code":"[^"]*"' | cut -d'"' -f4)
+
+          TOKEN=$(curl -sf -X POST http://localhost:8123/auth/token \
+            -d "grant_type=authorization_code&code=${AUTH_CODE}&client_id=http://localhost:8123/" \
+            | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+
+          echo "::add-mask::${TOKEN}"
+          echo "token=${TOKEN}" >> "$GITHUB_OUTPUT"
+
+          curl -sf -X POST "http://localhost:8123/api/onboarding/core_config" \
+            -H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json" -d '{}' >/dev/null
+          curl -sf -X POST "http://localhost:8123/api/onboarding/analytics" \
+            -H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json" -d '{}' >/dev/null
+
+      - name: Install the integration via the real config flow
+        env:
+          TOKEN: ${{ steps.onboarding.outputs.token }}
+        run: |
+          set -e
+          sleep 3  # let the demo platform's switch entities register
+
+          FLOW_ID=$(curl -sf -X POST http://localhost:8123/api/config/config_entries/flow \
+            -H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json" \
+            -d '{"handler":"irrigation_sequencer","show_advanced_options":false}' \
+            | grep -o '"flow_id":"[^"]*"' | cut -d'"' -f4)
+
+          if [ -z "$FLOW_ID" ]; then
+            echo "::error::Config flow did not start"
+            exit 1
+          fi
+
+          RESULT=$(curl -sf -X POST "http://localhost:8123/api/config/config_entries/flow/${FLOW_ID}" \
+            -H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json" \
+            -d '{"name":"CI Irrigation","zone_entities":["switch.decorative_lights"]}')
+          echo "$RESULT"
+
+          if ! echo "$RESULT" | grep -q '"type":"create_entry"'; then
+            echo "::error::Config flow did not complete with create_entry: $RESULT"
+            exit 1
+          fi
+          if ! echo "$RESULT" | grep -q '"state":"loaded"'; then
+            echo "::error::Config entry was created but did not reach state 'loaded': $RESULT"
+            exit 1
+          fi
+
+      - name: Verify the card is served with the right version
+        run: |
+          set -e
+          HTTP_CODE=$(curl -s -o card.js -w '%{http_code}' \
+            http://localhost:8123/irrigation_sequencer_files/irrigation-sequencer-card.js)
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Card JS not served, got HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+          CARD_VERSION=$(grep -o 'CARD_VERSION = "[^"]*"' card.js | cut -d'"' -f2)
+          MANIFEST_VERSION=$(grep -o '"version": "[^"]*"' custom_components/irrigation_sequencer/manifest.json | cut -d'"' -f4)
+          echo "Card reports $CARD_VERSION, manifest says $MANIFEST_VERSION"
+          if [ "$CARD_VERSION" != "$MANIFEST_VERSION" ]; then
+            echo "::error::Served card's CARD_VERSION ($CARD_VERSION) does not match manifest.json ($MANIFEST_VERSION)"
+            exit 1
+          fi
+
+      - name: Dump full Home Assistant log
+        if: always()
+        run: docker logs ha || true
+
+      - name: Stop Home Assistant
+        if: always()
+        run: docker stop ha && docker rm ha
