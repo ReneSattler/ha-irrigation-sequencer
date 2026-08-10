@@ -91,6 +91,17 @@ jobs:
           curl -sf -X POST "http://localhost:8123/api/onboarding/analytics" \
             -H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json" -d '{}' >/dev/null
 
+      - name: Show the Home Assistant version under test
+        env:
+          TOKEN: ${{ steps.onboarding.outputs.token }}
+        run: |
+          set -e
+          HA_VERSION=$(curl -sf http://localhost:8123/api/config \
+            -H "Authorization: Bearer ${TOKEN}" \
+            | grep -o '"version": *"[^"]*"' | head -1 | cut -d'"' -f4)
+          echo "Testing against Home Assistant Core ${HA_VERSION} (the :stable image tag - always whatever's current when this run happens)"
+          echo "### Home Assistant version under test: \`${HA_VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Install the integration via the real config flow
         env:
           TOKEN: ${{ steps.onboarding.outputs.token }}
