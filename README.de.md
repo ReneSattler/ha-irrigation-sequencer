@@ -268,6 +268,13 @@ hält. Das ist die direkte Signatur genau dieser Art von geräteseitiger
 Abschaltung. Prüf beides, falls die tatsächliche Laufzeit eines Laufs
 nicht zu dem passt, was die Karte vorhergesagt hat.
 
+Zu finden: Die Log-Zeilen erscheinen unter **Einstellungen → System →
+Protokolle** (nach `irrigation_sequencer` suchen), das Attribut
+`last_run_zones` ist unter **Entwicklerwerkzeuge → Zustände** sichtbar,
+wenn man den eigenen Status-Sensor nachschlägt (z. B.
+`sensor.rasenbewasserung_status`) - Debug-Protokollierung muss dafür nicht
+aktiviert werden.
+
 ## Entwicklung
 
 Für die Backend-Logik (`custom_components/irrigation_sequencer/manager.py`)
