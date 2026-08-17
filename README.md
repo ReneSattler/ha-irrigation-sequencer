@@ -247,6 +247,12 @@ on, which is the direct signature of exactly this kind of device-side
 cutoff. Check both if a run's actual duration doesn't match what the card
 predicted.
 
+To find them: the log lines show up under **Settings → System → Logs**
+(search for `irrigation_sequencer`), and the `last_run_zones` attribute is
+visible under **Developer Tools → States** by looking up your status sensor
+entity (e.g. `sensor.lawn_irrigation_status`) - no need to enable debug
+logging for either.
+
 ## Development
 
 Backend logic (`custom_components/irrigation_sequencer/manager.py`) has a
