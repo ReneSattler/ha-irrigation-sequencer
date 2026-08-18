@@ -24,6 +24,15 @@ DEFAULT_NAME_BY_LANGUAGE = {
     "de": "Rasenbewässerung",
 }
 
+# Whether a zone that came on outside a run gets closed again. On by
+# default: the case that prompted this was a relay configured to switch on
+# after a power cut, i.e. the garden quietly watering itself for however
+# long nobody noticed. Turning it off keeps the reporting but leaves the
+# valve alone - the right choice if you also water manually from the
+# vendor's own app, which is indistinguishable from the device acting
+# alone (see UNEXPECTED_SOURCE_DEVICE).
+DEFAULT_AUTO_OFF_UNEXPECTED = True
+
 MIN_RAIN_PAUSE_DAYS = 1
 MAX_RAIN_PAUSE_DAYS = 24
 
@@ -76,6 +85,7 @@ SERVICE_CLEAR_RAIN_PAUSE = "clear_rain_pause"
 SERVICE_SET_WEATHER_ADJUSTMENT = "set_weather_adjustment"
 SERVICE_SET_WINTER_MODE = "set_winter_mode"
 SERVICE_SET_NOTIFY_TARGET = "set_notify_target"
+SERVICE_SET_AUTO_OFF_UNEXPECTED = "set_auto_off_unexpected"
 SERVICE_START_NOW = "start_now"
 SERVICE_STOP = "stop"
 
@@ -115,6 +125,37 @@ ATTR_NOTIFY_TARGET = "notify_target"
 # really on for, so a mismatch (e.g. a device cutting itself off early) is
 # visible without digging through logs.
 ATTR_LAST_RUN_ZONES = "last_run_zones"
+# Zones that switched on while no sequence was running, with who/what
+# appears to have done it. See UNEXPECTED_SOURCE_* below.
+ATTR_UNEXPECTED_ZONE_ACTIVATIONS = "unexpected_zone_activations"
+ATTR_AUTO_OFF_UNEXPECTED_ENABLED = "auto_off_unexpected_enabled"
+
+# How a zone came to be on outside a run, classified from the state
+# change's context (Home Assistant tags every state change with one):
+#   - a context carrying a user id means a person clicked it in the HA UI
+#   - no user id but a parent id means another automation/script did it
+#   - neither means nothing in Home Assistant asked for it at all
+#
+# That last case is genuinely ambiguous and the wording says so: a person
+# tapping the zone in the vendor's own app looks *identical* to the relay
+# switching itself on, because neither reaches Home Assistant as anything
+# more than "this entity is now on". Home Assistant has no more
+# information to go on here, so neither do we.
+UNEXPECTED_SOURCE_USER = "ha_user"
+UNEXPECTED_SOURCE_AUTOMATION = "other_automation"
+UNEXPECTED_SOURCE_DEVICE = "outside_home_assistant"
+# A zone found already on when Home Assistant finished starting - the
+# device-side case we'd otherwise miss entirely, since a power cut that
+# flips a relay on usually takes Home Assistant down with it.
+UNEXPECTED_SOURCE_STARTUP = "already_on_at_startup"
+
+# Cap on the retained activation history, so a device stuck in a loop
+# can't grow the attribute (and the stored state file) without bound.
+MAX_UNEXPECTED_ACTIVATIONS_KEPT = 20
+# Per-entity quiet period after handling one activation. Without it, a
+# device that immediately switches itself back on would produce an endless
+# turn-off/turn-on ping-pong of log lines and service calls.
+UNEXPECTED_ACTIVATION_COOLDOWN_SECONDS = 30
 
 # Notification sent after a completed run, when a notify target is
 # configured. Keyed by hass.config.language, same pattern as
@@ -127,5 +168,36 @@ NOTIFY_MESSAGES_BY_LANGUAGE = {
     "de": {
         "title": "Bewässerung abgeschlossen",
         "message": "Lief {minutes} Minuten.",
+    },
+}
+
+# Notification sent when a zone was switched on outside a run and turned
+# back off again. Same language handling as NOTIFY_MESSAGES_BY_LANGUAGE.
+UNEXPECTED_ACTIVATION_MESSAGES_BY_LANGUAGE = {
+    "en": {
+        "title": "Irrigation zone turned on outside a run",
+        "message_turned_off": "{zone} was switched on {source}. It has been turned off again.",
+        "message_left_on": "{zone} was switched on {source}. It was left running.",
+        "sources": {
+            UNEXPECTED_SOURCE_AUTOMATION: "by another automation or script",
+            UNEXPECTED_SOURCE_DEVICE: (
+                "outside Home Assistant - the vendor app, a button on the device, "
+                "or the device switching itself on"
+            ),
+            UNEXPECTED_SOURCE_STARTUP: "and was already on when Home Assistant started",
+        },
+    },
+    "de": {
+        "title": "Bewässerungszone außerhalb eines Laufs eingeschaltet",
+        "message_turned_off": "{zone} wurde {source} eingeschaltet und wieder ausgeschaltet.",
+        "message_left_on": "{zone} wurde {source} eingeschaltet und läuft weiter.",
+        "sources": {
+            UNEXPECTED_SOURCE_AUTOMATION: "von einer anderen Automatisierung oder einem Skript",
+            UNEXPECTED_SOURCE_DEVICE: (
+                "außerhalb von Home Assistant - Hersteller-App, Taster am Gerät "
+                "oder das Gerät selbst"
+            ),
+            UNEXPECTED_SOURCE_STARTUP: "vor dem Start von Home Assistant",
+        },
     },
 }

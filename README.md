@@ -247,6 +247,30 @@ on, which is the direct signature of exactly this kind of device-side
 cutoff. Check both if a run's actual duration doesn't match what the card
 predicted.
 
+**A zone watered when nothing was scheduled?** Since v1.5.0 the
+integration watches its zone entities whenever no sequence is running and
+records every switch-on it didn't cause, together with what caused it.
+Home Assistant stamps each state change with a context, and its shape is
+what separates the cases:
+
+| Switched on by | Notification | Valve closed again | Recorded |
+|---|---|---|---|
+| A person, in the Home Assistant UI | no | no | yes, with the user's name |
+| Another automation or script | no | no | yes, with the automation's name |
+| Outside Home Assistant - vendor app, a button on the device, or the device itself (e.g. a relay set to power on after an outage) | yes | yes* | yes |
+| Already on when Home Assistant started | yes | yes* | yes |
+
+\* Controlled by the **"Turn off zones switched on outside a run"** switch
+(on by default, also in the settings card). Turn it off if you water
+manually from the valve vendor's own app - Home Assistant cannot tell that
+apart from the device switching itself on, since neither reaches it as
+anything more than "this entity is now on", so the guard would otherwise
+shut the water off under you. Reporting continues either way.
+
+The history lives in the status sensor's `unexpected_zone_activations`
+attribute (survives a restart, which matters: the power-cut case usually
+takes Home Assistant down with it).
+
 To find them: the log lines show up under **Settings → System → Logs**
 (search for `irrigation_sequencer`), and the `last_run_zones` attribute is
 visible under **Developer Tools → States** by looking up your status sensor
