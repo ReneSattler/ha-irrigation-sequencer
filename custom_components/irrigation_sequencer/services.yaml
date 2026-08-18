@@ -119,6 +119,27 @@ set_winter_mode:
       selector:
         boolean:
 
+set_auto_off_unexpected:
+  name: Set auto-off for zones switched on outside a run
+  description: >-
+    Controls whether a zone that switches on while no sequence is running
+    gets turned off again. Such an activation is always logged, recorded in
+    the status sensor's last_run_zones/unexpected_zone_activations
+    attributes and notified; this only governs whether the valve is also
+    closed. Turn it off if you water manually from the valve vendor's own
+    app - that is indistinguishable from the device switching itself on.
+    A zone switched on by hand from the Home Assistant UI is never touched
+    either way.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    enabled:
+      required: true
+      selector:
+        boolean:
+
 set_notify_target:
   name: Set notify target
   description: >-

@@ -8,6 +8,7 @@ from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
+    ATTR_AUTO_OFF_UNEXPECTED_ENABLED,
     ATTR_CURRENT_ZONE_ENTITY_ID,
     ATTR_CURRENT_ZONE_INDEX,
     ATTR_ESTIMATED_TOTAL_SECONDS,
@@ -20,6 +21,7 @@ from .const import (
     ATTR_SECONDS_REMAINING_TOTAL,
     ATTR_SECONDS_REMAINING_ZONE,
     ATTR_START_TIMES,
+    ATTR_UNEXPECTED_ZONE_ACTIVATIONS,
     ATTR_WEATHER_ADJUSTMENT_ENABLED,
     ATTR_WEATHER_CURRENT_FACTOR,
     ATTR_WEATHER_CURRENT_TEMP,
@@ -104,4 +106,6 @@ class IrrigationSequencerStatusSensor(Entity):
             ATTR_WEATHER_EFFECTIVE_TEMP: self._manager.weather_effective_temp,
             ATTR_SCALED_TOTAL_SECONDS: self._manager.scaled_total_seconds,
             ATTR_LAST_RUN_ZONES: self._manager.last_run_zones,
+            ATTR_UNEXPECTED_ZONE_ACTIVATIONS: self._manager.unexpected_zone_activations,
+            ATTR_AUTO_OFF_UNEXPECTED_ENABLED: self._manager.auto_off_unexpected_enabled,
         }
