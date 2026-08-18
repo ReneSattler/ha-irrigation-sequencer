@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from unittest.mock import patch
 
 import pytest
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Context, HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 
 from custom_components.irrigation_sequencer.manager import IrrigationSequencerManager
@@ -512,3 +512,200 @@ async def test_last_run_zones_persists_across_reload(hass: HomeAssistant) -> Non
     reloaded = make_manager(hass, ["switch.zone_1"])
     await reloaded.async_load()
     assert reloaded.last_run_zones == manager.last_run_zones
+
+
+# --------------------------------------------------------------------- #
+# Zones switching on outside a run
+# --------------------------------------------------------------------- #
+
+
+async def _watching_manager(hass: HomeAssistant, entity_id="switch.zone_1"):
+    """A loaded manager watching one zone, with the valve calls captured.
+
+    Starts the zone off and settles startup so the tests below control
+    exactly which activation the manager gets to see."""
+    hass.states.async_set(entity_id, "off")
+    manager = make_manager(hass, [entity_id])
+    await manager.async_load()
+    await hass.async_block_till_done()
+
+    calls = []
+
+    async def fake_set_valve(eid, on):
+        calls.append((eid, on))
+
+    manager._async_set_valve = fake_set_valve
+    return manager, calls
+
+
+async def test_device_side_activation_is_recorded_and_switched_off(
+    hass: HomeAssistant,
+) -> None:
+    """A relay that comes up on its own - its built-in timer, the vendor
+    app, or a power cut with "turn on when powered" configured - waters the
+    garden with nothing in Home Assistant having asked for it. The context
+    on such a state change carries neither a user nor a parent."""
+    manager, calls = await _watching_manager(hass)
+
+    hass.states.async_set("switch.zone_1", "on")
+    await hass.async_block_till_done()
+
+    assert calls == [("switch.zone_1", False)]
+    assert len(manager.unexpected_zone_activations) == 1
+    record = manager.unexpected_zone_activations[0]
+    assert record["entity_id"] == "switch.zone_1"
+    assert record["source"] == "outside_home_assistant"
+    assert record["turned_off"] is True
+
+
+async def test_manual_switch_on_from_the_ui_is_recorded_but_left_running(
+    hass: HomeAssistant,
+) -> None:
+    """Turning a zone on by hand to water something extra is a legitimate
+    thing to do - shutting it off under the user would be worse than the
+    problem this guards against. It is still recorded, so it stays possible
+    to tell afterwards that a watering wasn't the schedule's doing."""
+    manager, calls = await _watching_manager(hass)
+
+    hass.states.async_set(
+        "switch.zone_1", "on", context=Context(user_id="a-real-person")
+    )
+    await hass.async_block_till_done()
+
+    assert calls == []
+    assert len(manager.unexpected_zone_activations) == 1
+    record = manager.unexpected_zone_activations[0]
+    assert record["source"] == "ha_user"
+    assert record["turned_off"] is False
+
+
+async def test_switch_on_by_another_automation_is_recorded_and_named(
+    hass: HomeAssistant,
+) -> None:
+    """Another automation opening a valve is deliberate, so it is left
+    running - but "a zone came on" is only half an answer while
+    troubleshooting; which automation did it is the useful half."""
+    manager, calls = await _watching_manager(hass)
+
+    trigger = Context()
+    hass.states.async_set(
+        "automation.old_garden_script",
+        "on",
+        {"friendly_name": "Old garden script"},
+        context=trigger,
+    )
+    hass.states.async_set(
+        "switch.zone_1", "on", context=Context(parent_id=trigger.id)
+    )
+    await hass.async_block_till_done()
+
+    assert calls == []
+    assert len(manager.unexpected_zone_activations) == 1
+    record = manager.unexpected_zone_activations[0]
+    assert record["source"] == "other_automation"
+    assert record["actor"] == "Old garden script"
+    assert record["turned_off"] is False
+
+
+async def test_auto_off_disabled_reports_but_leaves_the_valve_open(
+    hass: HomeAssistant,
+) -> None:
+    """Someone who waters from the vendor's own app needs the reporting
+    without the guard closing the valve under them - the two are
+    indistinguishable to Home Assistant."""
+    manager, calls = await _watching_manager(hass)
+    await manager.async_set_auto_off_unexpected(False)
+
+    hass.states.async_set("switch.zone_1", "on")
+    await hass.async_block_till_done()
+
+    assert calls == []
+    assert len(manager.unexpected_zone_activations) == 1
+    assert manager.unexpected_zone_activations[0]["turned_off"] is False
+
+
+async def test_auto_off_setting_persists_across_reload(hass: HomeAssistant) -> None:
+    manager, _ = await _watching_manager(hass)
+    assert manager.auto_off_unexpected_enabled is True
+
+    await manager.async_set_auto_off_unexpected(False)
+
+    reloaded = make_manager(hass, ["switch.zone_1"])
+    await reloaded.async_load()
+    assert reloaded.auto_off_unexpected_enabled is False
+
+
+async def test_activation_during_a_run_is_not_flagged(hass: HomeAssistant) -> None:
+    """The sequence turns zones on itself; that must never be mistaken for
+    an unexpected activation and switched back off mid-run."""
+    manager, calls = await _watching_manager(hass)
+    manager.zones[0]["duration_minutes"] = 1
+
+    async def turn_on_midway():
+        await asyncio.sleep(0.05)
+        hass.states.async_set("switch.zone_1", "on")
+        await hass.async_block_till_done()
+
+    with patch("asyncio.sleep", _instant_sleep):
+        run = asyncio.create_task(manager._async_run_sequence())
+        await turn_on_midway()
+        await asyncio.wait_for(run, timeout=5)
+
+    assert manager.unexpected_zone_activations == []
+
+
+async def test_repeat_activation_within_cooldown_is_ignored(hass: HomeAssistant) -> None:
+    """A device that switches itself straight back on would otherwise
+    produce an unbounded turn-off/turn-on ping-pong."""
+    manager, calls = await _watching_manager(hass)
+
+    hass.states.async_set("switch.zone_1", "on")
+    await hass.async_block_till_done()
+    hass.states.async_set("switch.zone_1", "off")
+    await hass.async_block_till_done()
+    hass.states.async_set("switch.zone_1", "on")
+    await hass.async_block_till_done()
+
+    assert len(manager.unexpected_zone_activations) == 1
+
+
+async def test_unexpected_activations_persist_across_reload(hass: HomeAssistant) -> None:
+    """The power-cut case takes Home Assistant down with it, so this has to
+    still be there after it comes back up."""
+    manager, _ = await _watching_manager(hass)
+
+    hass.states.async_set("switch.zone_1", "on")
+    await hass.async_block_till_done()
+    assert len(manager.unexpected_zone_activations) == 1
+
+    # The valve really does close as a result, so a manager coming up after
+    # the restart finds it off and has nothing new of its own to report.
+    hass.states.async_set("switch.zone_1", "off")
+    await hass.async_block_till_done()
+
+    reloaded = make_manager(hass, ["switch.zone_1"])
+    await reloaded.async_load()
+    await hass.async_block_till_done()
+    assert reloaded.unexpected_zone_activations == manager.unexpected_zone_activations
+
+
+async def test_zone_already_on_at_startup_is_flagged(hass: HomeAssistant) -> None:
+    """A power cut that flips a relay on usually takes Home Assistant down
+    too, so the state change happens with nothing listening - checking once
+    after startup is what catches it at all."""
+    # Deliberately no listener: the point is a zone that was already on
+    # before this integration was watching anything at all.
+    hass.states.async_set("switch.zone_1", "on")
+    manager = make_manager(hass, ["switch.zone_1"])
+    calls = []
+
+    async def fake_set_valve(eid, on):
+        calls.append((eid, on))
+
+    manager._async_set_valve = fake_set_valve
+
+    await manager._async_check_zones_on_at_startup()
+
+    assert calls == [("switch.zone_1", False)]
+    assert len(manager.unexpected_zone_activations) == 1
+    assert manager.unexpected_zone_activations[0]["source"] == "already_on_at_startup"

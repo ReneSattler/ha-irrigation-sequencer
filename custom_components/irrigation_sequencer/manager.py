@@ -3,17 +3,23 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import date, datetime, timedelta
 from typing import Any, Callable
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers.event import async_track_time_change, async_track_time_interval
+from homeassistant.helpers.event import (
+    async_track_state_change_event,
+    async_track_time_change,
+    async_track_time_interval,
+)
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    DEFAULT_AUTO_OFF_UNEXPECTED,
     DEFAULT_PAUSE_SECONDS,
     DEFAULT_START_TIME,
     DEFAULT_WEATHER_HOT_FACTOR,
@@ -23,6 +29,7 @@ from .const import (
     DEFAULT_ZONE_DURATION_MINUTES,
     FORECAST_REFRESH_MINUTES,
     MAX_START_TIMES,
+    MAX_UNEXPECTED_ACTIVATIONS_KEPT,
     MAX_WEATHER_FACTOR,
     MIN_START_TIMES,
     MIN_WEATHER_FACTOR,
@@ -34,12 +41,25 @@ from .const import (
     STATE_WINTER_MODE,
     STORAGE_KEY_PREFIX,
     STORAGE_VERSION,
+    UNEXPECTED_ACTIVATION_COOLDOWN_SECONDS,
+    UNEXPECTED_ACTIVATION_MESSAGES_BY_LANGUAGE,
+    UNEXPECTED_SOURCE_AUTOMATION,
+    UNEXPECTED_SOURCE_DEVICE,
+    UNEXPECTED_SOURCE_STARTUP,
+    UNEXPECTED_SOURCE_USER,
     WEATHER_TEMP_SOURCE_CURRENT,
     WEATHER_TEMP_SOURCE_FORECAST_HIGH,
     WEATHER_TEMP_SOURCES,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _on_state_for(entity_id: str) -> str:
+    """The state string that means "water is flowing" for this entity.
+
+    Valves report open/closed; switches and lights report on/off."""
+    return "open" if entity_id.startswith("valve.") else "on"
 
 
 class IrrigationSequencerManager:
@@ -89,12 +109,22 @@ class IrrigationSequencerManager:
         self.seconds_remaining_total: int = 0
 
         self._run_task: asyncio.Task | None = None
+        # Set by the sequence itself rather than inferred from _run_task,
+        # which is assigned by the caller and so isn't reliably set for
+        # every path into _async_run_sequence.
+        self._sequence_running = False
         self._stop_requested = False
         self._unsub_daily_triggers: list[Callable[[], None]] = []
         self._listeners: list[Callable[[], None]] = []
         # What actually happened in the most recent run, one entry per zone,
         # appended live as each zone finishes - see _async_run_sequence.
         self.last_run_zones: list[dict[str, Any]] = []
+        # Zones seen switching on while no sequence was running, newest
+        # last - see _handle_zone_state_event.
+        self.unexpected_zone_activations: list[dict[str, Any]] = []
+        self.auto_off_unexpected_enabled: bool = DEFAULT_AUTO_OFF_UNEXPECTED
+        self._unsub_zone_watch: Callable[[], None] | None = None
+        self._unexpected_handled_at: dict[str, float] = {}
 
     # ------------------------------------------------------------------ #
     # Setup / persistence
@@ -143,9 +173,14 @@ class IrrigationSequencerManager:
             # guarantee nobody restarts HA (an update, a crash) between one
             # finishing and someone actually checking the attribute.
             self.last_run_zones = data.get("last_run_zones", [])
+            self.unexpected_zone_activations = data.get("unexpected_zone_activations", [])
+            self.auto_off_unexpected_enabled = data.get(
+                "auto_off_unexpected_enabled", DEFAULT_AUTO_OFF_UNEXPECTED
+            )
 
         self._schedule_daily_trigger()
         self._schedule_forecast_refresh()
+        self._schedule_zone_watch()
 
         # Don't fetch during setup: weather integrations are often not up
         # yet at that point, and calling weather.get_forecasts against an
@@ -153,10 +188,16 @@ class IrrigationSequencerManager:
         # "Referenced entities ... are missing or not currently available"
         # - our warning, in the user's log, for a fetch that was never
         # going to succeed. Wait until startup has finished instead.
-        async def _initial_forecast(_hass) -> None:
+        async def _after_start(_hass) -> None:
             await self.async_refresh_forecast()
+            # A power cut that flips a relay on ("turn on when powered")
+            # usually takes Home Assistant down with it, so the state
+            # change that turned the zone on happens while nothing is
+            # listening. Checking once after startup is what catches that
+            # case at all - the live listener never sees it.
+            await self._async_check_zones_on_at_startup()
 
-        async_at_started(self.hass, _initial_forecast)
+        async_at_started(self.hass, _after_start)
 
     @callback
     def _schedule_forecast_refresh(self) -> None:
@@ -186,6 +227,8 @@ class IrrigationSequencerManager:
                 "weather_hot_factor": self.weather_hot_factor,
                 "weather_temp_source": self.weather_temp_source,
                 "last_run_zones": self.last_run_zones,
+                "unexpected_zone_activations": self.unexpected_zone_activations,
+                "auto_off_unexpected_enabled": self.auto_off_unexpected_enabled,
             }
         )
 
@@ -209,9 +252,246 @@ class IrrigationSequencerManager:
         if self._unsub_forecast_refresh is not None:
             self._unsub_forecast_refresh()
             self._unsub_forecast_refresh = None
+        if self._unsub_zone_watch is not None:
+            self._unsub_zone_watch()
+            self._unsub_zone_watch = None
         if self._run_task and not self._run_task.done():
             self._stop_requested = True
             await self._run_task
+
+    # ------------------------------------------------------------------ #
+    # Watching for zones switching on outside a run
+    # ------------------------------------------------------------------ #
+
+    @property
+    def _sequence_active(self) -> bool:
+        """True while a run owns the valves.
+
+        Deliberately not keyed off self.status: the run starts by
+        refreshing the forecast, which can take a moment, and status is
+        still "idle" for that stretch - a zone turned on right then is the
+        sequence's own doing and must not be flagged."""
+        return self._sequence_running or (
+            self._run_task is not None and not self._run_task.done()
+        )
+
+    @callback
+    def _schedule_zone_watch(self) -> None:
+        """Watch the zone entities for switching on while nothing here asked
+        them to.
+
+        The sequence only ever *commands* the valves; without this, anything
+        that turns one on behind Home Assistant's back - the device's own
+        timer, the vendor app, a physical button, or a power-loss reboot
+        with "turn on when powered" configured - just silently waters the
+        garden, and the only trace is an entry in the entity's history that
+        looks much like any other."""
+        if self._unsub_zone_watch is not None:
+            self._unsub_zone_watch()
+            self._unsub_zone_watch = None
+
+        entity_ids = [zone["entity_id"] for zone in self.zones]
+        if not entity_ids:
+            return
+
+        self._unsub_zone_watch = async_track_state_change_event(
+            self.hass, entity_ids, self._handle_zone_state_event
+        )
+
+    @callback
+    def _handle_zone_state_event(self, event) -> None:
+        if self._sequence_active:
+            return
+
+        new_state = event.data.get("new_state")
+        old_state = event.data.get("old_state")
+        if new_state is None:
+            return
+
+        entity_id = new_state.entity_id
+        on_state = _on_state_for(entity_id)
+        if new_state.state != on_state:
+            return
+        # Only react to the transition into "on". Attribute-only updates
+        # (power readings on a metering relay, for instance) arrive as
+        # state changes too and would otherwise re-trigger on every tick.
+        if old_state is not None and old_state.state == on_state:
+            return
+
+        context = new_state.context
+        source = self._classify_activation(context)
+        self.hass.async_create_task(
+            self._async_handle_unexpected_activation(entity_id, source, context)
+        )
+
+    @callback
+    def _classify_activation(self, context) -> str:
+        """Work out who turned a zone on from the state change's context.
+
+        Home Assistant stamps every state change with one, and its shape is
+        the only thing that distinguishes a person clicking in the UI from
+        a relay that came up on its own."""
+        if context is None:
+            return UNEXPECTED_SOURCE_DEVICE
+        if getattr(context, "user_id", None) is not None:
+            return UNEXPECTED_SOURCE_USER
+        if getattr(context, "parent_id", None) is not None:
+            return UNEXPECTED_SOURCE_AUTOMATION
+        return UNEXPECTED_SOURCE_DEVICE
+
+    async def _async_check_zones_on_at_startup(self) -> None:
+        """Catch zones that were already on when Home Assistant came up."""
+        if self._sequence_active:
+            return
+        for zone in self.zones:
+            entity_id = zone["entity_id"]
+            state = self.hass.states.get(entity_id)
+            if state is not None and state.state == _on_state_for(entity_id):
+                await self._async_handle_unexpected_activation(
+                    entity_id, UNEXPECTED_SOURCE_STARTUP, None
+                )
+
+    async def _async_describe_actor(self, context) -> str | None:
+        """Name whoever inside Home Assistant caused this, if anyone did.
+
+        "A zone came on" is only half an answer during troubleshooting -
+        which person, or which of your automations, is the half that
+        actually tells you where to go looking."""
+        if context is None:
+            return None
+
+        user_id = getattr(context, "user_id", None)
+        if user_id is not None:
+            try:
+                user = await self.hass.auth.async_get_user(user_id)
+            except Exception:  # noqa: BLE001 - naming is a nicety, never fatal
+                return user_id
+            return user.name if user is not None and user.name else user_id
+
+        parent_id = getattr(context, "parent_id", None)
+        if parent_id is not None:
+            # The automation/script that ran stamped its own entity state
+            # with the parent context, so matching on it names the culprit.
+            # Same heuristic the logbook uses for "triggered by".
+            for state in self.hass.states.async_all():
+                if state.domain not in ("automation", "script", "scene"):
+                    continue
+                if state.context.id == parent_id:
+                    return state.attributes.get("friendly_name") or state.entity_id
+        return None
+
+    async def _async_handle_unexpected_activation(
+        self, entity_id: str, source: str, context=None
+    ) -> None:
+        """Record it, and - only if it came from outside Home Assistant -
+        report it and close the valve again.
+
+        A zone switched on from inside Home Assistant, by a person or by
+        another automation, is deliberate: it gets recorded with whoever
+        did it, and is otherwise left alone."""
+        now = time.monotonic()
+        last = self._unexpected_handled_at.get(entity_id)
+        if last is not None and now - last < UNEXPECTED_ACTIVATION_COOLDOWN_SECONDS:
+            return
+        self._unexpected_handled_at[entity_id] = now
+
+        actor = await self._async_describe_actor(context)
+
+        # Anything Home Assistant itself initiated - a person clicking, or
+        # another automation - is left running: it was deliberate, and
+        # closing the valve under whoever opened it would be worse than the
+        # problem this guards against. Only a switch-on that reached us
+        # from outside Home Assistant entirely is treated as one to undo.
+        from_outside_ha = source in (UNEXPECTED_SOURCE_DEVICE, UNEXPECTED_SOURCE_STARTUP)
+        should_turn_off = from_outside_ha and self.auto_off_unexpected_enabled
+
+        record = {
+            "entity_id": entity_id,
+            "zone_name": self._zone_display_name(entity_id),
+            "source": source,
+            "actor": actor,
+            "at": dt_util.now().isoformat(),
+            "turned_off": False,
+        }
+
+        if from_outside_ha:
+            _LOGGER.warning(
+                "Zone %s switched on while no sequence was running, from outside "
+                "Home Assistant (%s)%s. Nothing in Home Assistant asked for it - if "
+                "this repeats, check the device's own settings (auto-on timer, state "
+                "after power loss) and its vendor app.",
+                entity_id,
+                source,
+                " - turning it back off" if should_turn_off else "",
+            )
+        else:
+            _LOGGER.info(
+                "Zone %s was switched on outside a run by %s (%s) - recorded, "
+                "left running",
+                entity_id,
+                actor or "someone in Home Assistant",
+                source,
+            )
+
+        if should_turn_off:
+            try:
+                await self._async_set_valve(entity_id, False)
+                record["turned_off"] = True
+            except Exception as err:  # noqa: BLE001 - recording it matters more
+                record["error"] = str(err)
+                _LOGGER.error("Could not turn zone %s back off: %s", entity_id, err)
+
+        self.unexpected_zone_activations = (
+            self.unexpected_zone_activations + [record]
+        )[-MAX_UNEXPECTED_ACTIVATIONS_KEPT:]
+        await self._async_save()
+        self._notify_listeners()
+        if from_outside_ha:
+            await self._async_send_unexpected_activation_notification(record)
+
+    def _zone_display_name(self, entity_id: str) -> str:
+        """The zone's custom name if it has one, else whatever Home
+        Assistant calls the entity - the notification should name the zone
+        the way the user does, not by entity id."""
+        for zone in self.zones:
+            if zone["entity_id"] == entity_id and zone.get("name"):
+                return zone["name"]
+        state = self.hass.states.get(entity_id)
+        if state is not None:
+            return state.attributes.get("friendly_name") or entity_id
+        return entity_id
+
+    async def _async_send_unexpected_activation_notification(
+        self, record: dict[str, Any]
+    ) -> None:
+        """Best-effort notify - the valve is already closed by this point,
+        so a failure here must not surface as an error."""
+        if not self.notify_target:
+            return
+        language = self.hass.config.language
+        texts = UNEXPECTED_ACTIVATION_MESSAGES_BY_LANGUAGE.get(
+            language, UNEXPECTED_ACTIVATION_MESSAGES_BY_LANGUAGE["en"]
+        )
+        source_label = texts["sources"].get(record["source"], record["source"])
+        template = texts["message_turned_off" if record["turned_off"] else "message_left_on"]
+        try:
+            await self.hass.services.async_call(
+                "notify",
+                self.notify_target,
+                {
+                    "title": texts["title"],
+                    "message": template.format(
+                        zone=record["zone_name"], source=source_label
+                    ),
+                },
+                blocking=True,
+            )
+        except Exception as err:  # noqa: BLE001 - best-effort, must not raise
+            _LOGGER.warning(
+                "Failed to send unexpected-activation notification to notify.%s: %s",
+                self.notify_target,
+                err,
+            )
 
     # ------------------------------------------------------------------ #
     # Configuration changes (called from services / the card)
@@ -306,6 +586,11 @@ class IrrigationSequencerManager:
 
     async def async_set_winter_mode(self, enabled: bool) -> None:
         self.winter_mode = enabled
+        await self._async_save()
+        self._notify_listeners()
+
+    async def async_set_auto_off_unexpected(self, enabled: bool) -> None:
+        self.auto_off_unexpected_enabled = bool(enabled)
         await self._async_save()
         self._notify_listeners()
 
@@ -566,6 +851,9 @@ class IrrigationSequencerManager:
         return head_seconds + rest + pauses
 
     async def _async_run_sequence(self) -> None:
+        # Claim the valves before anything else, so the zone watchdog knows
+        # every switch-on from here until the finally block is ours.
+        self._sequence_running = True
         # Never scale the run off a stale forecast.
         await self.async_refresh_forecast()
         # Snapshot the order so the iteration stays stable, but always look
@@ -613,7 +901,7 @@ class IrrigationSequencerManager:
                 )
 
                 await self._async_set_valve(entity_id, True)
-                expected_on_state = "open" if entity_id.startswith("valve.") else "on"
+                expected_on_state = _on_state_for(entity_id)
                 external_off_at: int | None = None
                 # Tick once per second (instead of one long sleep) so the
                 # countdown stays live, a stop request is picked up quickly,
@@ -705,6 +993,9 @@ class IrrigationSequencerManager:
         finally:
             for zone in self.zones:
                 await self._async_set_valve(zone["entity_id"], False)
+            # Everything is closed; from here on a zone going on again is
+            # somebody else's doing and the watchdog should say so.
+            self._sequence_running = False
             self.status = STATE_IDLE
             self.current_zone_index = None
             self.last_zone_index = None

@@ -19,6 +19,7 @@ async def async_setup_entry(
         [
             IrrigationSequencerWinterModeSwitch(manager, entry),
             IrrigationSequencerWeatherAdjustmentSwitch(manager, entry),
+            IrrigationSequencerAutoOffUnexpectedSwitch(manager, entry),
         ]
     )
 
@@ -90,3 +91,29 @@ class IrrigationSequencerWeatherAdjustmentSwitch(_BaseSwitch):
             self._manager.weather_hot_temp,
             self._manager.weather_hot_factor,
         )
+
+
+class IrrigationSequencerAutoOffUnexpectedSwitch(_BaseSwitch):
+    """Switch controlling whether a zone that came on outside a run gets
+    closed again.
+
+    Turn it off if you also water manually from the valve vendor's own app:
+    that is indistinguishable from the device switching itself on, so the
+    guard would otherwise shut the water off under you. Reporting (log,
+    attribute, notification) happens either way."""
+
+    _attr_translation_key = "auto_off_unexpected"
+    _attr_icon = "mdi:water-alert"
+
+    def __init__(self, manager: IrrigationSequencerManager, entry: ConfigEntry) -> None:
+        super().__init__(manager, entry, "auto_off_unexpected")
+
+    @property
+    def is_on(self) -> bool:
+        return self._manager.auto_off_unexpected_enabled
+
+    async def async_turn_on(self, **kwargs) -> None:
+        await self._manager.async_set_auto_off_unexpected(True)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        await self._manager.async_set_auto_off_unexpected(False)

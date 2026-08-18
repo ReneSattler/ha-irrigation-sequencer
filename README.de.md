@@ -268,6 +268,31 @@ hält. Das ist die direkte Signatur genau dieser Art von geräteseitiger
 Abschaltung. Prüf beides, falls die tatsächliche Laufzeit eines Laufs
 nicht zu dem passt, was die Karte vorhergesagt hat.
 
+**Eine Zone hat gewässert, obwohl nichts geplant war?** Seit v1.5.0
+überwacht die Integration ihre Zonen-Entitäten, solange kein Lauf aktiv
+ist, und protokolliert jedes Einschalten, das nicht von ihr kam – samt
+Verursacher. Home Assistant versieht jede Zustandsänderung mit einem
+Kontext, und dessen Form unterscheidet die Fälle:
+
+| Eingeschaltet von | Benachrichtigung | Ventil wird zugedreht | Protokolliert |
+|---|---|---|---|
+| Person über die Home-Assistant-Oberfläche | nein | nein | ja, mit Benutzername |
+| Andere Automatisierung oder Skript | nein | nein | ja, mit Name der Automatisierung |
+| Außerhalb von Home Assistant – Hersteller-App, Taster am Gerät oder das Gerät selbst (z. B. Relais, das nach Stromausfall angeht) | ja | ja* | ja |
+| War beim Start von Home Assistant schon an | ja | ja* | ja |
+
+\* Steuerbar über den Schalter **„Zonen abschalten, die außerhalb eines
+Laufs angehen"** (standardmäßig an, auch in der Settings-Card). Ausschalten,
+falls du auch mal über die Hersteller-App des Ventils von Hand gießt – Home
+Assistant kann das nicht vom eigenmächtigen Einschalten des Geräts
+unterscheiden, weil beides dort nur als „diese Entität ist jetzt an"
+ankommt; sonst würde dir der Schutz das Wasser abdrehen. Die Protokollierung
+läuft in beiden Fällen weiter.
+
+Die Historie steht im Attribut `unexpected_zone_activations` des
+Status-Sensors (übersteht einen Neustart – wichtig, weil der Stromausfall-Fall
+Home Assistant meist gleich mit lahmlegt).
+
 Zu finden: Die Log-Zeilen erscheinen unter **Einstellungen → System →
 Protokolle** (nach `irrigation_sequencer` suchen), das Attribut
 `last_run_zones` ist unter **Entwicklerwerkzeuge → Zustände** sichtbar,
