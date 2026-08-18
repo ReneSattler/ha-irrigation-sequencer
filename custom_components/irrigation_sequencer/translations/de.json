@@ -52,6 +52,9 @@
       },
       "weather_adjustment": {
         "name": "Wetterbasierte Dauer-Anpassung"
+      },
+      "auto_off_unexpected": {
+        "name": "Zonen abschalten, die außerhalb eines Laufs angehen"
       }
     },
     "button": {

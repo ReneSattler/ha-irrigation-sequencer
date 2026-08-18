@@ -52,6 +52,9 @@
       },
       "weather_adjustment": {
         "name": "Weather-based duration adjustment"
+      },
+      "auto_off_unexpected": {
+        "name": "Turn off zones switched on outside a run"
       }
     },
     "button": {

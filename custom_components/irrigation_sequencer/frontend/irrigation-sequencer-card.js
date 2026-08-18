@@ -22,7 +22,7 @@ const DEFAULT_ZONE_DURATION_MINUTES = 10;
 // browser console, whether an update actually took effect versus just
 // looking "the same" as before. Keep this in step with manifest.json's
 // "version" on every release.
-const CARD_VERSION = "1.4.6";
+const CARD_VERSION = "1.5.0";
 // eslint-disable-next-line no-console
 console.info(
   `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
@@ -48,6 +48,7 @@ const TRANSLATIONS = {
     startTimesOverlap: (a, b, minutes) =>
       `${a} and ${b} are too close together (a full run currently takes about ${minutes} min) - they would overlap. Not saved.`,
     winterMode: "Winter mode",
+    autoOffUnexpected: "Turn off zones switched on outside a run",
     rainPause: "Rain pause",
     rainPauseClear: (until) => `until ${until} · clear`,
     rainPauseOff: "Off",
@@ -108,6 +109,7 @@ const TRANSLATIONS = {
     startTimesOverlap: (a, b, minutes) =>
       `${a} und ${b} liegen zu nah beieinander (ein Durchlauf dauert aktuell ca. ${minutes} min) - sie würden sich überschneiden. Nicht gespeichert.`,
     winterMode: "Wintermodus",
+    autoOffUnexpected: "Zonen abschalten, die außerhalb eines Laufs angehen",
     rainPause: "Regen-Pause",
     rainPauseClear: (until) => `bis ${until} · aufheben`,
     rainPauseOff: "Aus",
@@ -946,6 +948,17 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
             </div>
           </div>
 
+          <div class="tile-row" style="--tile-color: var(--warning-color, #ff9800)">
+            <div class="tile-row-icon"><ha-icon icon="mdi:water-alert"></ha-icon></div>
+            <div class="tile-row-label">${t.autoOffUnexpected}</div>
+            <div class="tile-row-control">
+              <label class="switch">
+                <input type="checkbox" id="auto-off-unexpected-toggle" ${attrs.auto_off_unexpected_enabled ? "checked" : ""} />
+                <span class="slider-toggle"></span>
+              </label>
+            </div>
+          </div>
+
           ${this._renderNotifySection(attrs, t)}
           ${this._renderWeatherSection(attrs, t)}
         </div>
@@ -1170,6 +1183,10 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
 
     root.getElementById("winter-toggle")?.addEventListener("change", (e) => {
       this._releaseRenderSuppression(this._callService("set_winter_mode", { enabled: e.target.checked }));
+    });
+
+    root.getElementById("auto-off-unexpected-toggle")?.addEventListener("change", (e) => {
+      this._releaseRenderSuppression(this._callService("set_auto_off_unexpected", { enabled: e.target.checked }));
     });
 
     const submitStartTimes = (times) => {
