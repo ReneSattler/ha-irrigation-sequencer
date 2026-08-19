@@ -145,6 +145,14 @@ ATTR_LAST_ZONE_SAFETY_SWEEP = "last_zone_safety_sweep"
 # indefinitely. Polling is the only thing that cannot be missed this way.
 ZONE_SAFETY_SWEEP_SECONDS = 15
 
+# How long to wait for a zone to actually report itself off after a
+# turn-off call returned successfully. Observed live: calls came back
+# reporting success while the zone sat on "on" untouched, its
+# last_changed never moving - so "the call succeeded" and "the water
+# stopped" turned out to be two different things.
+AUTO_OFF_VERIFY_SECONDS = 5
+AUTO_OFF_VERIFY_POLL_SECONDS = 0.5
+
 # How a zone came to be on outside a run, classified from the state
 # change's context (Home Assistant tags every state change with one):
 #   - a context carrying a user id means a person clicked it in the HA UI
