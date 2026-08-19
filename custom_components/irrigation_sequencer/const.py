@@ -134,6 +134,7 @@ ATTR_AUTO_OFF_UNEXPECTED_ENABLED = "auto_off_unexpected_enabled"
 # unexpected_activation_phase. Not persisted; empty once nothing is
 # in-flight.
 ATTR_UNEXPECTED_ACTIVATION_PHASE = "unexpected_activation_phase"
+ATTR_LAST_ZONE_EVENT_SEEN = "last_zone_event_seen"
 
 # How a zone came to be on outside a run, classified from the state
 # change's context (Home Assistant tags every state change with one):
