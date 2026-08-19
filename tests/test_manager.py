@@ -749,6 +749,50 @@ async def test_overlapping_activations_do_not_race_the_turn_off_call(
     assert call_log == ["start:False", "end:False", "start:False", "end:False"]
 
 
+async def test_a_hung_turn_off_call_times_out_instead_of_blocking_forever(
+    hass: HomeAssistant,
+) -> None:
+    """Reported live: after the lock fix, one turn-off call to a real
+    (Tuya-backed) device never returned - no exception, nothing in the
+    log - while an independent, freshly issued turn_off for the same
+    entity succeeded immediately. Nothing here was blocking the device;
+    our own queued call just never came back. Without a timeout, that
+    hangs the per-zone lock forever, wedging every future activation of
+    that zone behind it until Home Assistant restarts."""
+    manager, _ = await _watching_manager(hass)
+
+    async def hangs_forever(entity_id, on):
+        await asyncio.Event().wait()  # never set - simulates no response ever coming
+
+    manager._async_set_valve = hangs_forever
+
+    with patch(
+        "custom_components.irrigation_sequencer.manager.AUTO_OFF_CALL_TIMEOUT_SECONDS",
+        0.05,
+    ):
+        hass.states.async_set("switch.zone_1", "on")
+        await asyncio.wait_for(hass.async_block_till_done(), timeout=2)
+
+    record = manager.unexpected_zone_activations[-1]
+    assert record["turned_off"] is False
+    assert "timed out" in record["error"]
+
+    # The lock must have been released despite the timeout - a second
+    # activation (now with a working turn-off) is not stuck behind it.
+    calls = []
+
+    async def working_set_valve(entity_id, on):
+        calls.append((entity_id, on))
+
+    manager._async_set_valve = working_set_valve
+    hass.states.async_set("switch.zone_1", "off")
+    await hass.async_block_till_done()
+    hass.states.async_set("switch.zone_1", "on")
+    await asyncio.wait_for(hass.async_block_till_done(), timeout=2)
+
+    assert calls == [("switch.zone_1", False)]
+
+
 async def test_attempt_counter_resets_after_a_quiet_window(hass: HomeAssistant) -> None:
     """Giving up must not be permanent - a zone that behaves for a while
     and then comes on again weeks later is a fresh incident, not the

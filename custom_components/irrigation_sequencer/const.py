@@ -167,6 +167,12 @@ UNEXPECTED_ACTIVATION_REPORT_COOLDOWN_SECONDS = 30
 MAX_AUTO_OFF_ATTEMPTS = 5
 AUTO_OFF_ATTEMPT_WINDOW_SECONDS = 60
 
+# Bound on a single turn-off attempt. Guards the per-zone lock: without
+# this, a downstream integration/cloud that never responds to the service
+# call would hold the lock forever, wedging every future activation of
+# that zone behind it until Home Assistant restarts.
+AUTO_OFF_CALL_TIMEOUT_SECONDS = 20
+
 # Notification sent after a completed run, when a notify target is
 # configured. Keyed by hass.config.language, same pattern as
 # DEFAULT_NAME_BY_LANGUAGE - falls back to "en" for unmapped languages.
