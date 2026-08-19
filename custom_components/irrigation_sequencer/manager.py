@@ -42,6 +42,7 @@ from .const import (
     STORAGE_KEY_PREFIX,
     STORAGE_VERSION,
     AUTO_OFF_ATTEMPT_WINDOW_SECONDS,
+    AUTO_OFF_CALL_TIMEOUT_SECONDS,
     MAX_AUTO_OFF_ATTEMPTS,
     UNEXPECTED_ACTIVATION_MESSAGES_BY_LANGUAGE,
     UNEXPECTED_ACTIVATION_REPORT_COOLDOWN_SECONDS,
@@ -441,8 +442,18 @@ class IrrigationSequencerManager:
                     self._gave_up_announced.add(entity_id)
                 else:
                     try:
-                        await self._async_set_valve(entity_id, False)
+                        async with asyncio.timeout(AUTO_OFF_CALL_TIMEOUT_SECONDS):
+                            await self._async_set_valve(entity_id, False)
                         turned_off = True
+                    except TimeoutError:
+                        error = f"timed out after {AUTO_OFF_CALL_TIMEOUT_SECONDS}s"
+                        _LOGGER.error(
+                            "Turning zone %s off did not complete within %ds - "
+                            "giving up on this attempt so the zone isn't blocked "
+                            "for future ones. It may still be running.",
+                            entity_id,
+                            AUTO_OFF_CALL_TIMEOUT_SECONDS,
+                        )
                     except Exception as err:  # noqa: BLE001 - reporting matters more
                         error = str(err)
                         _LOGGER.error(
