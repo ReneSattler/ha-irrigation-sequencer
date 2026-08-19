@@ -432,9 +432,14 @@ class IrrigationSequencerManager:
         if wants_turn_off:
             # A second activation for this zone waits here for the first's
             # turn-off call to actually finish, rather than firing its own
-            # concurrently - see _unexpected_locks.
+            # concurrently - see _unexpected_locks. Logged at info (not
+            # debug) unconditionally, one line per phase, so which of these
+            # three stages an attempt got stuck at is visible without
+            # needing debug logging enabled ahead of time.
             lock = self._unexpected_locks.setdefault(entity_id, asyncio.Lock())
+            _LOGGER.info("Zone %s: waiting for its turn-off lock", entity_id)
             async with lock:
+                _LOGGER.info("Zone %s: lock acquired", entity_id)
                 attempts = self._count_auto_off_attempt(entity_id, now)
                 if attempts > MAX_AUTO_OFF_ATTEMPTS:
                     gave_up = True
@@ -442,9 +447,16 @@ class IrrigationSequencerManager:
                     self._gave_up_announced.add(entity_id)
                 else:
                     try:
+                        _LOGGER.info(
+                            "Zone %s: calling turn-off (attempt %d, timeout %ds)",
+                            entity_id,
+                            attempts,
+                            AUTO_OFF_CALL_TIMEOUT_SECONDS,
+                        )
                         async with asyncio.timeout(AUTO_OFF_CALL_TIMEOUT_SECONDS):
                             await self._async_set_valve(entity_id, False)
                         turned_off = True
+                        _LOGGER.info("Zone %s: turn-off call returned", entity_id)
                     except TimeoutError:
                         error = f"timed out after {AUTO_OFF_CALL_TIMEOUT_SECONDS}s"
                         _LOGGER.error(
