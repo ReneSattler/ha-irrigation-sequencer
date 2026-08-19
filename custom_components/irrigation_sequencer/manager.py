@@ -160,6 +160,11 @@ class IrrigationSequencerManager:
         # of the two when the first was still in flight on a slow cloud
         # round trip.
         self._unexpected_locks: dict[str, asyncio.Lock] = {}
+        # Strong references to turn-off calls still running, so a task that
+        # outlived the timeout waiting on it is neither garbage collected
+        # mid-flight nor left with its exception uncollected. Entries drop
+        # out as they finish - see _on_off_task_done.
+        self._orphaned_off_tasks: set[asyncio.Task] = set()
         # Entities we've already announced giving up on in the current
         # burst - saying it once is the point; saying it on every
         # subsequent flap would be the message flood this avoids.
@@ -482,8 +487,34 @@ class IrrigationSequencerManager:
                         )
                         self.unexpected_activation_phase[entity_id] = "calling_off"
                         self._notify_listeners()
+
+                        # The call is run as its own task and awaited behind
+                        # asyncio.shield rather than awaited directly: a
+                        # live case showed the timeout below did not bound
+                        # a hung call as intended, because the cancellation
+                        # asyncio.timeout sends never made it back out
+                        # through Home Assistant's/the device integration's
+                        # own service-call machinery. Shielding means the
+                        # timeout only gives up on *waiting*, never depends
+                        # on the call honouring cancellation. A timed-out
+                        # call is left running rather than cancelled, since
+                        # it may still land - but it is not waited on again:
+                        # live, a freshly issued call to the same device
+                        # went through immediately while an earlier one was
+                        # still hung, so the next activation must get its
+                        # own call rather than join the stuck one.
+                        off_task = self.hass.async_create_task(
+                            self._async_set_valve(entity_id, False)
+                        )
+                        self._orphaned_off_tasks.add(off_task)
+                        off_task.add_done_callback(
+                            lambda task, eid=entity_id: self._on_off_task_done(
+                                eid, task
+                            )
+                        )
+
                         async with asyncio.timeout(AUTO_OFF_CALL_TIMEOUT_SECONDS):
-                            await self._async_set_valve(entity_id, False)
+                            await asyncio.shield(off_task)
                         turned_off = True
                         _LOGGER.info("Zone %s: turn-off call returned", entity_id)
                         self.unexpected_activation_phase.pop(entity_id, None)
@@ -494,8 +525,10 @@ class IrrigationSequencerManager:
                         self._notify_listeners()
                         _LOGGER.error(
                             "Turning zone %s off did not complete within %ds - "
-                            "giving up on this attempt so the zone isn't blocked "
-                            "for future ones. It may still be running.",
+                            "giving up on waiting for this attempt so the "
+                            "zone isn't blocked for future ones. The call "
+                            "itself is left running in the background in "
+                            "case it eventually goes through.",
                             entity_id,
                             AUTO_OFF_CALL_TIMEOUT_SECONDS,
                         )
@@ -568,6 +601,38 @@ class IrrigationSequencerManager:
         self._notify_listeners()
         if from_outside_ha:
             await self._async_send_unexpected_activation_notification(record)
+
+    @callback
+    def _on_off_task_done(self, entity_id: str, task: asyncio.Task) -> None:
+        """Runs once a turn-off call finishes, however late.
+
+        Only relevant after a timeout already moved on without waiting for
+        it: retrieves the task's result/exception so it isn't logged as
+        never collected, and if nothing newer has since taken over this
+        entity's slot, reports the belated outcome and clears the stale
+        "timed_out" phase so a call that quietly succeeded doesn't keep
+        looking stuck."""
+        self._orphaned_off_tasks.discard(task)
+
+        if task.cancelled():
+            return
+        err = task.exception()
+        if err is not None:
+            _LOGGER.error(
+                "Zone %s: turn-off call that had already timed out failed: %s",
+                entity_id,
+                err,
+            )
+            return
+
+        _LOGGER.info(
+            "Zone %s: turn-off call that had already timed out finished "
+            "successfully",
+            entity_id,
+        )
+        if self.unexpected_activation_phase.get(entity_id) == "timed_out":
+            self.unexpected_activation_phase.pop(entity_id, None)
+            self._notify_listeners()
 
     def _count_auto_off_attempt(self, entity_id: str, now: float) -> int:
         """Number of auto-off attempts for this zone in the current burst.
