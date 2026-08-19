@@ -41,8 +41,10 @@ from .const import (
     STATE_WINTER_MODE,
     STORAGE_KEY_PREFIX,
     STORAGE_VERSION,
-    UNEXPECTED_ACTIVATION_COOLDOWN_SECONDS,
+    AUTO_OFF_ATTEMPT_WINDOW_SECONDS,
+    MAX_AUTO_OFF_ATTEMPTS,
     UNEXPECTED_ACTIVATION_MESSAGES_BY_LANGUAGE,
+    UNEXPECTED_ACTIVATION_REPORT_COOLDOWN_SECONDS,
     UNEXPECTED_SOURCE_AUTOMATION,
     UNEXPECTED_SOURCE_DEVICE,
     UNEXPECTED_SOURCE_STARTUP,
@@ -124,7 +126,17 @@ class IrrigationSequencerManager:
         self.unexpected_zone_activations: list[dict[str, Any]] = []
         self.auto_off_unexpected_enabled: bool = DEFAULT_AUTO_OFF_UNEXPECTED
         self._unsub_zone_watch: Callable[[], None] | None = None
-        self._unexpected_handled_at: dict[str, float] = {}
+        # Last time an activation of this entity was *reported* (record,
+        # log, notification). Closing the valve is not throttled by this.
+        self._unexpected_reported_at: dict[str, float] = {}
+        # Consecutive auto-off attempts per entity as (count, first_at), so
+        # a device that keeps switching itself back on can be given up on
+        # instead of traded service calls with forever.
+        self._auto_off_attempts: dict[str, tuple[int, float]] = {}
+        # Entities we've already announced giving up on in the current
+        # burst - saying it once is the point; saying it on every
+        # subsequent flap would be the message flood this avoids.
+        self._gave_up_announced: set[str] = set()
 
     # ------------------------------------------------------------------ #
     # Setup / persistence
@@ -390,11 +402,6 @@ class IrrigationSequencerManager:
         another automation, is deliberate: it gets recorded with whoever
         did it, and is otherwise left alone."""
         now = time.monotonic()
-        last = self._unexpected_handled_at.get(entity_id)
-        if last is not None and now - last < UNEXPECTED_ACTIVATION_COOLDOWN_SECONDS:
-            return
-        self._unexpected_handled_at[entity_id] = now
-
         actor = await self._async_describe_actor(context)
 
         # Anything Home Assistant itself initiated - a person clicking, or
@@ -403,7 +410,42 @@ class IrrigationSequencerManager:
         # problem this guards against. Only a switch-on that reached us
         # from outside Home Assistant entirely is treated as one to undo.
         from_outside_ha = source in (UNEXPECTED_SOURCE_DEVICE, UNEXPECTED_SOURCE_STARTUP)
-        should_turn_off = from_outside_ha and self.auto_off_unexpected_enabled
+        wants_turn_off = from_outside_ha and self.auto_off_unexpected_enabled
+
+        # Closing the valve happens on every single activation, never
+        # throttled: it is one idempotent service call, and skipping it
+        # because the same zone came on a moment ago left water running -
+        # the exact failure this guard exists to prevent.
+        turned_off = False
+        gave_up = False
+        first_give_up = False
+        error: str | None = None
+        if wants_turn_off:
+            attempts = self._count_auto_off_attempt(entity_id, now)
+            if attempts > MAX_AUTO_OFF_ATTEMPTS:
+                gave_up = True
+                first_give_up = entity_id not in self._gave_up_announced
+                self._gave_up_announced.add(entity_id)
+            else:
+                try:
+                    await self._async_set_valve(entity_id, False)
+                    turned_off = True
+                except Exception as err:  # noqa: BLE001 - reporting matters more
+                    error = str(err)
+                    _LOGGER.error("Could not turn zone %s back off: %s", entity_id, err)
+
+        # Reporting is what gets rate-limited instead, so a flapping device
+        # can't bury the user in push messages or fill the history with one
+        # incident. Giving up is always worth saying out loud.
+        last_reported = self._unexpected_reported_at.get(entity_id)
+        should_report = (
+            first_give_up
+            or last_reported is None
+            or now - last_reported >= UNEXPECTED_ACTIVATION_REPORT_COOLDOWN_SECONDS
+        )
+        if not should_report:
+            return
+        self._unexpected_reported_at[entity_id] = now
 
         record = {
             "entity_id": entity_id,
@@ -411,10 +453,23 @@ class IrrigationSequencerManager:
             "source": source,
             "actor": actor,
             "at": dt_util.now().isoformat(),
-            "turned_off": False,
+            "turned_off": turned_off,
+            "gave_up": gave_up,
         }
+        if error is not None:
+            record["error"] = error
 
-        if from_outside_ha:
+        if gave_up:
+            _LOGGER.error(
+                "Zone %s has switched itself back on more than %d times in %d s "
+                "despite being turned off - giving up. It may still be running; "
+                "check the device's own settings (auto-on timer, state after power "
+                "loss) and its vendor app.",
+                entity_id,
+                MAX_AUTO_OFF_ATTEMPTS,
+                AUTO_OFF_ATTEMPT_WINDOW_SECONDS,
+            )
+        elif from_outside_ha:
             _LOGGER.warning(
                 "Zone %s switched on while no sequence was running, from outside "
                 "Home Assistant (%s)%s. Nothing in Home Assistant asked for it - if "
@@ -422,7 +477,7 @@ class IrrigationSequencerManager:
                 "after power loss) and its vendor app.",
                 entity_id,
                 source,
-                " - turning it back off" if should_turn_off else "",
+                " - turned it back off" if turned_off else "",
             )
         else:
             _LOGGER.info(
@@ -433,14 +488,6 @@ class IrrigationSequencerManager:
                 source,
             )
 
-        if should_turn_off:
-            try:
-                await self._async_set_valve(entity_id, False)
-                record["turned_off"] = True
-            except Exception as err:  # noqa: BLE001 - recording it matters more
-                record["error"] = str(err)
-                _LOGGER.error("Could not turn zone %s back off: %s", entity_id, err)
-
         self.unexpected_zone_activations = (
             self.unexpected_zone_activations + [record]
         )[-MAX_UNEXPECTED_ACTIVATIONS_KEPT:]
@@ -448,6 +495,20 @@ class IrrigationSequencerManager:
         self._notify_listeners()
         if from_outside_ha:
             await self._async_send_unexpected_activation_notification(record)
+
+    def _count_auto_off_attempt(self, entity_id: str, now: float) -> int:
+        """Number of auto-off attempts for this zone in the current burst.
+
+        A zone that stays off for a full window starts counting again, so
+        an ordinary repeat weeks later is never treated as a continuation
+        of an old one."""
+        count, first_at = self._auto_off_attempts.get(entity_id, (0, now))
+        if now - first_at > AUTO_OFF_ATTEMPT_WINDOW_SECONDS:
+            count, first_at = 0, now
+            self._gave_up_announced.discard(entity_id)
+        count += 1
+        self._auto_off_attempts[entity_id] = (count, first_at)
+        return count
 
     def _zone_display_name(self, entity_id: str) -> str:
         """The zone's custom name if it has one, else whatever Home
@@ -473,16 +534,23 @@ class IrrigationSequencerManager:
             language, UNEXPECTED_ACTIVATION_MESSAGES_BY_LANGUAGE["en"]
         )
         source_label = texts["sources"].get(record["source"], record["source"])
-        template = texts["message_turned_off" if record["turned_off"] else "message_left_on"]
+        if record.get("gave_up"):
+            title = texts["title_giving_up"]
+            message = texts["message_giving_up"].format(
+                zone=record["zone_name"], attempts=MAX_AUTO_OFF_ATTEMPTS
+            )
+        else:
+            title = texts["title"]
+            message = texts[
+                "message_turned_off" if record["turned_off"] else "message_left_on"
+            ].format(zone=record["zone_name"], source=source_label)
         try:
             await self.hass.services.async_call(
                 "notify",
                 self.notify_target,
                 {
-                    "title": texts["title"],
-                    "message": template.format(
-                        zone=record["zone_name"], source=source_label
-                    ),
+                    "title": title,
+                    "message": message,
                 },
                 blocking=True,
             )

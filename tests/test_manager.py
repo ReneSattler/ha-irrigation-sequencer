@@ -654,19 +654,70 @@ async def test_activation_during_a_run_is_not_flagged(hass: HomeAssistant) -> No
     assert manager.unexpected_zone_activations == []
 
 
-async def test_repeat_activation_within_cooldown_is_ignored(hass: HomeAssistant) -> None:
-    """A device that switches itself straight back on would otherwise
-    produce an unbounded turn-off/turn-on ping-pong."""
+async def test_rapid_repeat_is_still_turned_off_but_reported_once(
+    hass: HomeAssistant,
+) -> None:
+    """Found live: a zone coming back on 2 s after being closed was left
+    running, because one cooldown throttled the reporting *and* the
+    turn-off together. Water must never be the thing that gets rate
+    limited - only the push messages and history entries are."""
     manager, calls = await _watching_manager(hass)
 
-    hass.states.async_set("switch.zone_1", "on")
-    await hass.async_block_till_done()
-    hass.states.async_set("switch.zone_1", "off")
-    await hass.async_block_till_done()
-    hass.states.async_set("switch.zone_1", "on")
-    await hass.async_block_till_done()
+    for _ in range(3):
+        hass.states.async_set("switch.zone_1", "on")
+        await hass.async_block_till_done()
+        hass.states.async_set("switch.zone_1", "off")
+        await hass.async_block_till_done()
 
+    # Closed every single time...
+    assert calls == [("switch.zone_1", False)] * 3
+    # ...but the user isn't told about the same flapping zone three times.
     assert len(manager.unexpected_zone_activations) == 1
+
+
+async def test_device_that_keeps_switching_itself_on_is_given_up_on(
+    hass: HomeAssistant,
+) -> None:
+    """Not throttling the turn-off means a device that insists on coming
+    back would otherwise trade service calls with us forever. After a
+    bounded number of attempts it stops and says so - which is the far
+    more useful outcome, since it names a problem the user has to fix on
+    the device itself."""
+    manager, calls = await _watching_manager(hass)
+
+    for _ in range(8):
+        hass.states.async_set("switch.zone_1", "on")
+        await hass.async_block_till_done()
+        hass.states.async_set("switch.zone_1", "off")
+        await hass.async_block_till_done()
+
+    assert len(calls) == 5  # MAX_AUTO_OFF_ATTEMPTS, then it stops trying
+    giving_up = [r for r in manager.unexpected_zone_activations if r.get("gave_up")]
+    assert len(giving_up) == 1
+    assert giving_up[0]["turned_off"] is False
+
+
+async def test_attempt_counter_resets_after_a_quiet_window(hass: HomeAssistant) -> None:
+    """Giving up must not be permanent - a zone that behaves for a while
+    and then comes on again weeks later is a fresh incident, not the
+    continuation of an old one."""
+    manager, calls = await _watching_manager(hass)
+
+    for _ in range(6):
+        hass.states.async_set("switch.zone_1", "on")
+        await hass.async_block_till_done()
+        hass.states.async_set("switch.zone_1", "off")
+        await hass.async_block_till_done()
+    assert len(calls) == 5
+
+    # Pretend the burst happened a couple of minutes ago.
+    manager._auto_off_attempts = {}
+    manager._unexpected_reported_at = {}
+    manager._gave_up_announced = set()
+
+    hass.states.async_set("switch.zone_1", "on")
+    await hass.async_block_till_done()
+    assert len(calls) == 6
 
 
 async def test_unexpected_activations_persist_across_reload(hass: HomeAssistant) -> None:

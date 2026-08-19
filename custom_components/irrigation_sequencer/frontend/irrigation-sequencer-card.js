@@ -22,7 +22,7 @@ const DEFAULT_ZONE_DURATION_MINUTES = 10;
 // browser console, whether an update actually took effect versus just
 // looking "the same" as before. Keep this in step with manifest.json's
 // "version" on every release.
-const CARD_VERSION = "1.5.0";
+const CARD_VERSION = "1.5.1";
 // eslint-disable-next-line no-console
 console.info(
   `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
@@ -48,7 +48,7 @@ const TRANSLATIONS = {
     startTimesOverlap: (a, b, minutes) =>
       `${a} and ${b} are too close together (a full run currently takes about ${minutes} min) - they would overlap. Not saved.`,
     winterMode: "Winter mode",
-    autoOffUnexpected: "Turn off zones switched on outside a run",
+    autoOffUnexpected: "Auto-off outside a run",
     rainPause: "Rain pause",
     rainPauseClear: (until) => `until ${until} · clear`,
     rainPauseOff: "Off",
@@ -109,7 +109,7 @@ const TRANSLATIONS = {
     startTimesOverlap: (a, b, minutes) =>
       `${a} und ${b} liegen zu nah beieinander (ein Durchlauf dauert aktuell ca. ${minutes} min) - sie würden sich überschneiden. Nicht gespeichert.`,
     winterMode: "Wintermodus",
-    autoOffUnexpected: "Zonen abschalten, die außerhalb eines Laufs angehen",
+    autoOffUnexpected: "Auto-Aus außerhalb Lauf",
     rainPause: "Regen-Pause",
     rainPauseClear: (until) => `bis ${until} · aufheben`,
     rainPauseOff: "Aus",
