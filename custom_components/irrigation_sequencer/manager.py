@@ -127,6 +127,16 @@ class IrrigationSequencerManager:
         self.unexpected_zone_activations: list[dict[str, Any]] = []
         self.auto_off_unexpected_enabled: bool = DEFAULT_AUTO_OFF_UNEXPECTED
         self._unsub_zone_watch: Callable[[], None] | None = None
+        # Live phase marker per zone entity for whatever is currently
+        # in-flight ("waiting_for_lock" / "lock_acquired" / "calling_off" /
+        # "off_call_returned" / "timed_out" / "error:<msg>" / None once
+        # settled), refreshed on the state machine the same way every other
+        # attribute here is - independent of Python logging entirely, since
+        # a log level can be silently overridden (a `logger:` block in
+        # configuration.yaml, some other integration, etc.) in ways that
+        # are invisible and unfixable from here. Diagnostic only; not
+        # persisted.
+        self.unexpected_activation_phase: dict[str, str] = {}
         # Last time an activation of this entity was *reported* (record,
         # log, notification). Closing the valve is not throttled by this.
         self._unexpected_reported_at: dict[str, float] = {}
@@ -438,8 +448,12 @@ class IrrigationSequencerManager:
             # needing debug logging enabled ahead of time.
             lock = self._unexpected_locks.setdefault(entity_id, asyncio.Lock())
             _LOGGER.info("Zone %s: waiting for its turn-off lock", entity_id)
+            self.unexpected_activation_phase[entity_id] = "waiting_for_lock"
+            self._notify_listeners()
             async with lock:
                 _LOGGER.info("Zone %s: lock acquired", entity_id)
+                self.unexpected_activation_phase[entity_id] = "lock_acquired"
+                self._notify_listeners()
                 attempts = self._count_auto_off_attempt(entity_id, now)
                 if attempts > MAX_AUTO_OFF_ATTEMPTS:
                     gave_up = True
@@ -453,12 +467,18 @@ class IrrigationSequencerManager:
                             attempts,
                             AUTO_OFF_CALL_TIMEOUT_SECONDS,
                         )
+                        self.unexpected_activation_phase[entity_id] = "calling_off"
+                        self._notify_listeners()
                         async with asyncio.timeout(AUTO_OFF_CALL_TIMEOUT_SECONDS):
                             await self._async_set_valve(entity_id, False)
                         turned_off = True
                         _LOGGER.info("Zone %s: turn-off call returned", entity_id)
+                        self.unexpected_activation_phase.pop(entity_id, None)
+                        self._notify_listeners()
                     except TimeoutError:
                         error = f"timed out after {AUTO_OFF_CALL_TIMEOUT_SECONDS}s"
+                        self.unexpected_activation_phase[entity_id] = "timed_out"
+                        self._notify_listeners()
                         _LOGGER.error(
                             "Turning zone %s off did not complete within %ds - "
                             "giving up on this attempt so the zone isn't blocked "
@@ -468,6 +488,8 @@ class IrrigationSequencerManager:
                         )
                     except Exception as err:  # noqa: BLE001 - reporting matters more
                         error = str(err)
+                        self.unexpected_activation_phase[entity_id] = f"error:{error}"
+                        self._notify_listeners()
                         _LOGGER.error(
                             "Could not turn zone %s back off: %s", entity_id, err
                         )

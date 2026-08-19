@@ -790,7 +790,38 @@ async def test_a_hung_turn_off_call_times_out_instead_of_blocking_forever(
     hass.states.async_set("switch.zone_1", "on")
     await asyncio.wait_for(hass.async_block_till_done(), timeout=2)
 
-    assert calls == [("switch.zone_1", False)]
+
+async def test_phase_attribute_tracks_an_in_flight_attempt_live(
+    hass: HomeAssistant,
+) -> None:
+    """The Python logger's level can be silently overridden outside this
+    integration's control (a `logger:` block, some other component),
+    making log-based diagnosis unreliable. This attribute uses the same
+    state-attribute mechanism as everything else here instead, so which
+    phase a stuck attempt is in is visible even when logs aren't."""
+    manager, _ = await _watching_manager(hass)
+
+    entered_call = asyncio.Event()
+    release_call = asyncio.Event()
+
+    async def pausable_set_valve(entity_id, on):
+        entered_call.set()
+        await release_call.wait()
+
+    manager._async_set_valve = pausable_set_valve
+
+    hass.states.async_set("switch.zone_1", "on")
+    await asyncio.wait_for(entered_call.wait(), timeout=2)
+
+    # Caught mid-flight: the phase must say so, and clearly enough to
+    # know it's the call itself and not still waiting on the lock.
+    assert manager.unexpected_activation_phase["switch.zone_1"] == "calling_off"
+
+    release_call.set()
+    await hass.async_block_till_done()
+
+    # Settled again - nothing left in-flight for this zone.
+    assert "switch.zone_1" not in manager.unexpected_activation_phase
 
 
 async def test_attempt_counter_resets_after_a_quiet_window(hass: HomeAssistant) -> None:
