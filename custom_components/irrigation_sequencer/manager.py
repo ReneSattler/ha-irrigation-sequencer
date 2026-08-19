@@ -50,6 +50,7 @@ from .const import (
     UNEXPECTED_SOURCE_DEVICE,
     UNEXPECTED_SOURCE_STARTUP,
     UNEXPECTED_SOURCE_USER,
+    ZONE_SAFETY_SWEEP_SECONDS,
     WEATHER_TEMP_SOURCE_CURRENT,
     WEATHER_TEMP_SOURCE_FORECAST_HIGH,
     WEATHER_TEMP_SOURCES,
@@ -63,6 +64,16 @@ def _on_state_for(entity_id: str) -> str:
 
     Valves report open/closed; switches and lights report on/off."""
     return "open" if entity_id.startswith("valve.") else "on"
+
+
+def _on_since(state) -> str:
+    """Identity of one "switched on" episode, shared by both detection
+    paths so neither handles what the other already did.
+
+    last_changed only moves when the state itself does, so it stays put
+    across attribute updates and names this particular switch-on until the
+    zone goes off again."""
+    return state.last_changed.isoformat()
 
 
 class IrrigationSequencerManager:
@@ -145,6 +156,14 @@ class IrrigationSequencerManager:
         # phase never moves, since that question turned out to not be
         # answerable any other way. Diagnostic only; not persisted.
         self.last_zone_event_seen: dict[str, str] = {}
+        # When the safety sweep last ran, and the "on since" timestamp of
+        # the activation already handled per zone. The latter is what makes
+        # the sweep and the listener idempotent with each other: both
+        # identify an activation by the state's last_changed, so whichever
+        # notices it first handles it and the other skips it.
+        self.last_zone_safety_sweep: str | None = None
+        self._handled_on_since: dict[str, str] = {}
+        self._unsub_safety_sweep: Callable[[], None] | None = None
         # Last time an activation of this entity was *reported* (record,
         # log, notification). Closing the valve is not throttled by this.
         self._unexpected_reported_at: dict[str, float] = {}
@@ -225,6 +244,7 @@ class IrrigationSequencerManager:
         self._schedule_daily_trigger()
         self._schedule_forecast_refresh()
         self._schedule_zone_watch()
+        self._schedule_zone_safety_sweep()
 
         # Don't fetch during setup: weather integrations are often not up
         # yet at that point, and calling weather.get_forecasts against an
@@ -299,6 +319,9 @@ class IrrigationSequencerManager:
         if self._unsub_zone_watch is not None:
             self._unsub_zone_watch()
             self._unsub_zone_watch = None
+        if self._unsub_safety_sweep is not None:
+            self._unsub_safety_sweep()
+            self._unsub_safety_sweep = None
         if self._run_task and not self._run_task.done():
             self._stop_requested = True
             await self._run_task
@@ -367,11 +390,68 @@ class IrrigationSequencerManager:
         if old_state is not None and old_state.state == on_state:
             return
 
+        self._handled_on_since[entity_id] = _on_since(new_state)
         context = new_state.context
         source = self._classify_activation(context)
         self.hass.async_create_task(
             self._async_handle_unexpected_activation(entity_id, source, context)
         )
+
+    @callback
+    def _schedule_zone_safety_sweep(self) -> None:
+        """Poll the zones' real states as a backstop for the listener.
+
+        Live evidence made this necessary: after one activation was handled
+        end to end, the state-change listener stopped delivering events for
+        that entity entirely - the zone's own history shows it going off
+        and back on with nothing reaching us - so a zone switched on again
+        seconds later stayed on with no trace. An event that never arrives
+        cannot be waited for; reading the state directly cannot be missed
+        the same way."""
+        if self._unsub_safety_sweep is not None:
+            self._unsub_safety_sweep()
+            self._unsub_safety_sweep = None
+
+        self._unsub_safety_sweep = async_track_time_interval(
+            self.hass,
+            self._async_zone_safety_sweep,
+            timedelta(seconds=ZONE_SAFETY_SWEEP_SECONDS),
+        )
+
+    async def _async_zone_safety_sweep(self, _now=None) -> None:
+        self.last_zone_safety_sweep = dt_util.now().isoformat()
+        if self._sequence_active:
+            self._notify_listeners()
+            return
+
+        for zone in list(self.zones):
+            entity_id = zone["entity_id"]
+            state = self.hass.states.get(entity_id)
+            if state is None or state.state != _on_state_for(entity_id):
+                continue
+
+            source = self._classify_activation(state.context)
+            wants_turn_off = (
+                source in (UNEXPECTED_SOURCE_DEVICE, UNEXPECTED_SOURCE_STARTUP)
+                and self.auto_off_unexpected_enabled
+            )
+            already_handled = self._handled_on_since.get(entity_id) == _on_since(state)
+            # A zone we deliberately leave running (a person's or another
+            # automation's doing) is recorded once and then left alone. One
+            # we should be closing is retried while it is still open, since
+            # "still on" means the last attempt did not take - the attempt
+            # counter is what stops that from going on forever.
+            if already_handled and (
+                not wants_turn_off or entity_id in self._gave_up_announced
+            ):
+                continue
+
+            self._handled_on_since[entity_id] = _on_since(state)
+            await self._async_handle_unexpected_activation(
+                entity_id, source, state.context
+            )
+
+        self._notify_listeners()
 
     @callback
     def _classify_activation(self, context) -> str:
@@ -396,6 +476,7 @@ class IrrigationSequencerManager:
             entity_id = zone["entity_id"]
             state = self.hass.states.get(entity_id)
             if state is not None and state.state == _on_state_for(entity_id):
+                self._handled_on_since[entity_id] = _on_since(state)
                 await self._async_handle_unexpected_activation(
                     entity_id, UNEXPECTED_SOURCE_STARTUP, None
                 )
