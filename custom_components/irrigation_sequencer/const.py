@@ -152,10 +152,20 @@ UNEXPECTED_SOURCE_STARTUP = "already_on_at_startup"
 # Cap on the retained activation history, so a device stuck in a loop
 # can't grow the attribute (and the stored state file) without bound.
 MAX_UNEXPECTED_ACTIVATIONS_KEPT = 20
-# Per-entity quiet period after handling one activation. Without it, a
-# device that immediately switches itself back on would produce an endless
-# turn-off/turn-on ping-pong of log lines and service calls.
-UNEXPECTED_ACTIVATION_COOLDOWN_SECONDS = 30
+# Per-entity quiet period for *reporting* an activation - the record, the
+# log line and the notification. Closing the valve is deliberately not
+# throttled: it is cheap, idempotent, and throttling it once meant a zone
+# that came back on 2 s later was left running, which is the exact failure
+# this whole feature exists to prevent.
+UNEXPECTED_ACTIVATION_REPORT_COOLDOWN_SECONDS = 30
+
+# Bound on how hard to fight a device that keeps switching itself back on:
+# more than this many attempts inside the window below and the integration
+# stops trying and says so, rather than trading service calls with it
+# forever. Normal service resumes once the zone has stayed off for a full
+# window.
+MAX_AUTO_OFF_ATTEMPTS = 5
+AUTO_OFF_ATTEMPT_WINDOW_SECONDS = 60
 
 # Notification sent after a completed run, when a notify target is
 # configured. Keyed by hass.config.language, same pattern as
@@ -178,6 +188,12 @@ UNEXPECTED_ACTIVATION_MESSAGES_BY_LANGUAGE = {
         "title": "Irrigation zone turned on outside a run",
         "message_turned_off": "{zone} was switched on {source}. It has been turned off again.",
         "message_left_on": "{zone} was switched on {source}. It was left running.",
+        "title_giving_up": "Irrigation zone keeps switching itself on",
+        "message_giving_up": (
+            "{zone} switched itself back on {attempts} times in a row despite being "
+            "turned off. No further attempts will be made - check the device's own "
+            "settings. It may still be running."
+        ),
         "sources": {
             UNEXPECTED_SOURCE_AUTOMATION: "by another automation or script",
             UNEXPECTED_SOURCE_DEVICE: (
@@ -191,6 +207,12 @@ UNEXPECTED_ACTIVATION_MESSAGES_BY_LANGUAGE = {
         "title": "Bewässerungszone außerhalb eines Laufs eingeschaltet",
         "message_turned_off": "{zone} wurde {source} eingeschaltet und wieder ausgeschaltet.",
         "message_left_on": "{zone} wurde {source} eingeschaltet und läuft weiter.",
+        "title_giving_up": "Bewässerungszone schaltet sich immer wieder selbst ein",
+        "message_giving_up": (
+            "{zone} hat sich {attempts}-mal in Folge wieder eingeschaltet, obwohl "
+            "abgeschaltet wurde. Es werden keine weiteren Versuche unternommen - "
+            "bitte die Geräteeinstellungen prüfen. Die Zone läuft möglicherweise noch."
+        ),
         "sources": {
             UNEXPECTED_SOURCE_AUTOMATION: "von einer anderen Automatisierung oder einem Skript",
             UNEXPECTED_SOURCE_DEVICE: (

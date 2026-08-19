@@ -281,13 +281,23 @@ Kontext, und dessen Form unterscheidet die Fälle:
 | Außerhalb von Home Assistant – Hersteller-App, Taster am Gerät oder das Gerät selbst (z. B. Relais, das nach Stromausfall angeht) | ja | ja* | ja |
 | War beim Start von Home Assistant schon an | ja | ja* | ja |
 
-\* Steuerbar über den Schalter **„Zonen abschalten, die außerhalb eines
-Laufs angehen"** (standardmäßig an, auch in der Settings-Card). Ausschalten,
-falls du auch mal über die Hersteller-App des Ventils von Hand gießt – Home
-Assistant kann das nicht vom eigenmächtigen Einschalten des Geräts
-unterscheiden, weil beides dort nur als „diese Entität ist jetzt an"
-ankommt; sonst würde dir der Schutz das Wasser abdrehen. Die Protokollierung
-läuft in beiden Fällen weiter.
+\* Steuerbar über den Schalter **„Auto-Aus außerhalb Lauf"** (standardmäßig
+an, auch in der Settings-Card). Ausschalten, falls du auch mal über die
+Hersteller-App des Ventils von Hand gießt – Home Assistant kann das nicht
+vom eigenmächtigen Einschalten des Geräts unterscheiden, weil beides dort
+nur als „diese Entität ist jetzt an" ankommt; sonst würde dir der Schutz
+das Wasser abdrehen. Die Protokollierung läuft in beiden Fällen weiter.
+
+Das Zudrehen wird nie gedrosselt – es passiert bei jedem einzelnen
+Einschalten, egal wie oft es sich wiederholt, weil ein einziges
+Aussetzen bedeuten würde, dass Wasser weiterläuft. Nur die
+**Meldung** (Push-Nachricht, Log-Zeile, Eintrag im Verlauf) ist auf
+eine pro Zone alle 30 s begrenzt, damit ein flatterndes Gerät dich nicht
+mit Push-Nachrichten zuschüttet. Schaltet sich ein Gerät innerhalb einer
+Minute mehr als 5-mal selbst wieder ein, obwohl es jedes Mal abgeschaltet
+wurde, gibt die Integration auf und meldet genau das einmalig
+(„schaltet sich immer wieder selbst ein") – deutlich hilfreicher als
+beides, und ein klarer Hinweis, die Geräteeinstellungen zu prüfen.
 
 Die Historie steht im Attribut `unexpected_zone_activations` des
 Status-Sensors (übersteht einen Neustart – wichtig, weil der Stromausfall-Fall
