@@ -1,5 +1,6 @@
 """Unit tests for IrrigationSequencerManager's core logic."""
 import asyncio
+import time
 from datetime import date, timedelta
 from unittest.mock import patch
 
@@ -7,6 +8,9 @@ import pytest
 from homeassistant.core import Context, HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 
+from custom_components.irrigation_sequencer.const import (
+    AUTO_OFF_ATTEMPT_WINDOW_SECONDS,
+)
 from custom_components.irrigation_sequencer.manager import IrrigationSequencerManager
 
 
@@ -533,6 +537,9 @@ async def _watching_manager(hass: HomeAssistant, entity_id="switch.zone_1"):
 
     async def fake_set_valve(eid, on):
         calls.append((eid, on))
+        # A working device actually changes state - the manager now checks
+        # that rather than trusting the call, so the fake has to as well.
+        hass.states.async_set(eid, "on" if on else "off")
 
     manager._async_set_valve = fake_set_valve
     return manager, calls
@@ -860,6 +867,7 @@ async def test_phase_attribute_tracks_an_in_flight_attempt_live(
     async def pausable_set_valve(entity_id, on):
         entered_call.set()
         await release_call.wait()
+        hass.states.async_set(entity_id, "on" if on else "off")
 
     manager._async_set_valve = pausable_set_valve
 
@@ -913,13 +921,68 @@ async def test_safety_sweep_keeps_trying_while_the_zone_is_still_on(
     manager._unsub_zone_watch()
     manager._unsub_zone_watch = None
 
+    # The live failure: the call is accepted and reports success, the
+    # device does not act on it, and the zone keeps reading "on".
+    async def accepted_but_ignored(eid, on):
+        calls.append((eid, on))
+
+    manager._async_set_valve = accepted_but_ignored
+
     hass.states.async_set("switch.zone_1", "on")
     await hass.async_block_till_done()
 
-    for _ in range(3):
-        await manager._async_zone_safety_sweep()
+    with patch(
+        "custom_components.irrigation_sequencer.manager.AUTO_OFF_VERIFY_SECONDS",
+        0.05,
+    ):
+        for _ in range(3):
+            await manager._async_zone_safety_sweep()
 
     assert calls == [("switch.zone_1", False)] * 3
+    # ...and it must not claim to have closed a zone that is still open.
+    assert manager.unexpected_zone_activations[-1]["turned_off"] is False
+    assert "still on" in manager.unexpected_zone_activations[-1]["error"]
+
+
+async def test_giving_up_wears_off_so_a_zone_is_never_left_on_for_good(
+    hass: HomeAssistant,
+) -> None:
+    """Found live: switching a zone on a few times in a row tripped the
+    give-up guard, and the sweep then skipped that zone for as long as it
+    stayed on - so the water kept running with nothing left that would
+    ever try again. Giving up has to mean "stop for now", never "stop
+    forever": the whole point of the guard is a device nobody can reach,
+    and that is exactly when abandoning it is worst."""
+    manager, calls = await _watching_manager(hass)
+    manager._unsub_zone_watch()
+    manager._unsub_zone_watch = None
+
+    async def accepted_but_ignored(eid, on):
+        calls.append((eid, on))
+
+    manager._async_set_valve = accepted_but_ignored
+
+    hass.states.async_set("switch.zone_1", "on")
+    await hass.async_block_till_done()
+
+    with patch(
+        "custom_components.irrigation_sequencer.manager.AUTO_OFF_VERIFY_SECONDS",
+        0.05,
+    ):
+        for _ in range(8):
+            await manager._async_zone_safety_sweep()
+        assert len(calls) == 5  # MAX_AUTO_OFF_ATTEMPTS, then it stops
+        assert "switch.zone_1" in manager._gave_up_announced
+
+        # Once the attempt window has passed, the zone - still on - has to
+        # get another round rather than being written off.
+        manager._auto_off_attempts["switch.zone_1"] = (
+            5,
+            time.monotonic() - AUTO_OFF_ATTEMPT_WINDOW_SECONDS - 1,
+        )
+        await manager._async_zone_safety_sweep()
+
+    assert len(calls) == 6
 
 
 async def test_safety_sweep_leaves_a_person_s_zone_alone(hass: HomeAssistant) -> None:

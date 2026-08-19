@@ -43,6 +43,8 @@ from .const import (
     STORAGE_VERSION,
     AUTO_OFF_ATTEMPT_WINDOW_SECONDS,
     AUTO_OFF_CALL_TIMEOUT_SECONDS,
+    AUTO_OFF_VERIFY_POLL_SECONDS,
+    AUTO_OFF_VERIFY_SECONDS,
     MAX_AUTO_OFF_ATTEMPTS,
     UNEXPECTED_ACTIVATION_MESSAGES_BY_LANGUAGE,
     UNEXPECTED_ACTIVATION_REPORT_COOLDOWN_SECONDS,
@@ -441,9 +443,7 @@ class IrrigationSequencerManager:
             # we should be closing is retried while it is still open, since
             # "still on" means the last attempt did not take - the attempt
             # counter is what stops that from going on forever.
-            if already_handled and (
-                not wants_turn_off or entity_id in self._gave_up_announced
-            ):
+            if already_handled and not wants_turn_off:
                 continue
 
             self._handled_on_since[entity_id] = _on_since(state)
@@ -558,6 +558,8 @@ class IrrigationSequencerManager:
                     gave_up = True
                     first_give_up = entity_id not in self._gave_up_announced
                     self._gave_up_announced.add(entity_id)
+                    self.unexpected_activation_phase[entity_id] = "gave_up"
+                    self._notify_listeners()
                 else:
                     try:
                         _LOGGER.info(
@@ -596,9 +598,30 @@ class IrrigationSequencerManager:
 
                         async with asyncio.timeout(AUTO_OFF_CALL_TIMEOUT_SECONDS):
                             await asyncio.shield(off_task)
-                        turned_off = True
                         _LOGGER.info("Zone %s: turn-off call returned", entity_id)
-                        self.unexpected_activation_phase.pop(entity_id, None)
+
+                        # A returned call is not a closed valve - live, the
+                        # two came apart repeatedly. Only the zone's own
+                        # state settles it.
+                        self.unexpected_activation_phase[entity_id] = "verifying"
+                        self._notify_listeners()
+                        turned_off = await self._async_wait_until_off(entity_id)
+                        if turned_off:
+                            self.unexpected_activation_phase.pop(entity_id, None)
+                        else:
+                            error = (
+                                "the turn-off call reported success but the "
+                                f"zone was still on {AUTO_OFF_VERIFY_SECONDS}s "
+                                "later"
+                            )
+                            self.unexpected_activation_phase[entity_id] = "still_on"
+                            _LOGGER.error(
+                                "Zone %s did not go off within %ds of a turn-off "
+                                "call that reported success - the command was "
+                                "accepted but the device did not act on it.",
+                                entity_id,
+                                AUTO_OFF_VERIFY_SECONDS,
+                            )
                         self._notify_listeners()
                     except TimeoutError:
                         error = f"timed out after {AUTO_OFF_CALL_TIMEOUT_SECONDS}s"
@@ -620,6 +643,13 @@ class IrrigationSequencerManager:
                         _LOGGER.error(
                             "Could not turn zone %s back off: %s", entity_id, err
                         )
+
+        # Having already given up is not news. The sweep keeps coming back
+        # to a zone it gave up on so the attempt window can re-arm and try
+        # again later, and every one of those visits would otherwise write
+        # its own "gave up" entry.
+        if gave_up and not first_give_up:
+            return
 
         # Reporting is what gets rate-limited instead, so a flapping device
         # can't bury the user in push messages or fill the history with one
@@ -682,6 +712,23 @@ class IrrigationSequencerManager:
         self._notify_listeners()
         if from_outside_ha:
             await self._async_send_unexpected_activation_notification(record)
+
+    async def _async_wait_until_off(self, entity_id: str) -> bool:
+        """Whether the zone actually went off, not whether the call said so.
+
+        Live, these came apart repeatedly: turn-off calls returned success
+        while the zone sat on "on" with its last_changed never moving, and
+        the history then recorded "turned off" for a zone that was still
+        watering."""
+        on_state = _on_state_for(entity_id)
+        deadline = time.monotonic() + AUTO_OFF_VERIFY_SECONDS
+        while True:
+            state = self.hass.states.get(entity_id)
+            if state is None or state.state != on_state:
+                return True
+            if time.monotonic() >= deadline:
+                return False
+            await asyncio.sleep(AUTO_OFF_VERIFY_POLL_SECONDS)
 
     @callback
     def _on_off_task_done(self, entity_id: str, task: asyncio.Task) -> None:
