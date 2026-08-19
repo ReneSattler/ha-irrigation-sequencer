@@ -129,6 +129,11 @@ ATTR_LAST_RUN_ZONES = "last_run_zones"
 # appears to have done it. See UNEXPECTED_SOURCE_* below.
 ATTR_UNEXPECTED_ZONE_ACTIVATIONS = "unexpected_zone_activations"
 ATTR_AUTO_OFF_UNEXPECTED_ENABLED = "auto_off_unexpected_enabled"
+# Live, in-flight diagnostic for an unexpected-activation turn-off attempt
+# currently being handled - see IrrigationSequencerManager.
+# unexpected_activation_phase. Not persisted; empty once nothing is
+# in-flight.
+ATTR_UNEXPECTED_ACTIVATION_PHASE = "unexpected_activation_phase"
 
 # How a zone came to be on outside a run, classified from the state
 # change's context (Home Assistant tags every state change with one):
