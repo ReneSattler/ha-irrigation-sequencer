@@ -133,6 +133,14 @@ class IrrigationSequencerManager:
         # a device that keeps switching itself back on can be given up on
         # instead of traded service calls with forever.
         self._auto_off_attempts: dict[str, tuple[int, float]] = {}
+        # One lock per zone entity, created on first use. A second
+        # activation for a zone already being handled waits for the first
+        # to finish its turn-off call before making its own, instead of
+        # both racing a service call at the same device concurrently -
+        # observed live to make a downstream integration (Tuya) drop one
+        # of the two when the first was still in flight on a slow cloud
+        # round trip.
+        self._unexpected_locks: dict[str, asyncio.Lock] = {}
         # Entities we've already announced giving up on in the current
         # burst - saying it once is the point; saying it on every
         # subsequent flap would be the message flood this avoids.
@@ -421,18 +429,25 @@ class IrrigationSequencerManager:
         first_give_up = False
         error: str | None = None
         if wants_turn_off:
-            attempts = self._count_auto_off_attempt(entity_id, now)
-            if attempts > MAX_AUTO_OFF_ATTEMPTS:
-                gave_up = True
-                first_give_up = entity_id not in self._gave_up_announced
-                self._gave_up_announced.add(entity_id)
-            else:
-                try:
-                    await self._async_set_valve(entity_id, False)
-                    turned_off = True
-                except Exception as err:  # noqa: BLE001 - reporting matters more
-                    error = str(err)
-                    _LOGGER.error("Could not turn zone %s back off: %s", entity_id, err)
+            # A second activation for this zone waits here for the first's
+            # turn-off call to actually finish, rather than firing its own
+            # concurrently - see _unexpected_locks.
+            lock = self._unexpected_locks.setdefault(entity_id, asyncio.Lock())
+            async with lock:
+                attempts = self._count_auto_off_attempt(entity_id, now)
+                if attempts > MAX_AUTO_OFF_ATTEMPTS:
+                    gave_up = True
+                    first_give_up = entity_id not in self._gave_up_announced
+                    self._gave_up_announced.add(entity_id)
+                else:
+                    try:
+                        await self._async_set_valve(entity_id, False)
+                        turned_off = True
+                    except Exception as err:  # noqa: BLE001 - reporting matters more
+                        error = str(err)
+                        _LOGGER.error(
+                            "Could not turn zone %s back off: %s", entity_id, err
+                        )
 
         # Reporting is what gets rate-limited instead, so a flapping device
         # can't bury the user in push messages or fill the history with one
