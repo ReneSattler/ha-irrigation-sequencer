@@ -137,6 +137,14 @@ class IrrigationSequencerManager:
         # are invisible and unfixable from here. Diagnostic only; not
         # persisted.
         self.unexpected_activation_phase: dict[str, str] = {}
+        # Timestamp (isoformat) the state-change listener last *saw* a raw
+        # event for a zone entity, written before any early return in
+        # _handle_zone_state_event - including ones filtered out as
+        # attribute-only updates or a running sequence. Exists purely to
+        # answer "did the listener fire at all" when unexpected_activation_
+        # phase never moves, since that question turned out to not be
+        # answerable any other way. Diagnostic only; not persisted.
+        self.last_zone_event_seen: dict[str, str] = {}
         # Last time an activation of this entity was *reported* (record,
         # log, notification). Closing the valve is not throttled by this.
         self._unexpected_reported_at: dict[str, float] = {}
@@ -331,6 +339,11 @@ class IrrigationSequencerManager:
 
     @callback
     def _handle_zone_state_event(self, event) -> None:
+        watched_entity_id = event.data.get("entity_id")
+        if watched_entity_id is not None:
+            self.last_zone_event_seen[watched_entity_id] = dt_util.now().isoformat()
+            self._notify_listeners()
+
         if self._sequence_active:
             return
 

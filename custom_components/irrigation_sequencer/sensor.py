@@ -13,6 +13,7 @@ from .const import (
     ATTR_CURRENT_ZONE_INDEX,
     ATTR_ESTIMATED_TOTAL_SECONDS,
     ATTR_LAST_RUN_ZONES,
+    ATTR_LAST_ZONE_EVENT_SEEN,
     ATTR_LAST_ZONE_INDEX,
     ATTR_NEXT_RUN,
     ATTR_NOTIFY_TARGET,
@@ -110,4 +111,5 @@ class IrrigationSequencerStatusSensor(Entity):
             ATTR_UNEXPECTED_ZONE_ACTIVATIONS: self._manager.unexpected_zone_activations,
             ATTR_AUTO_OFF_UNEXPECTED_ENABLED: self._manager.auto_off_unexpected_enabled,
             ATTR_UNEXPECTED_ACTIVATION_PHASE: self._manager.unexpected_activation_phase,
+            ATTR_LAST_ZONE_EVENT_SEEN: self._manager.last_zone_event_seen,
         }
