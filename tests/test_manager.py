@@ -697,6 +697,58 @@ async def test_device_that_keeps_switching_itself_on_is_given_up_on(
     assert giving_up[0]["turned_off"] is False
 
 
+async def test_overlapping_activations_do_not_race_the_turn_off_call(
+    hass: HomeAssistant,
+) -> None:
+    """Reported live against a real Tuya-backed zone: a slow cloud round
+    trip on the first turn-off call left it still in flight when a second
+    activation of the same zone arrived. Firing a second, concurrent
+    turn_off at the same device let the downstream integration drop one of
+    them - the zone was found stuck on with no error logged anywhere.
+    A second activation must wait for the first's call to actually finish
+    rather than racing it."""
+    manager, _ = await _watching_manager(hass)
+
+    call_log: list[str] = []
+    release_first = asyncio.Event()
+
+    async def slow_then_fast_set_valve(entity_id, on):
+        call_log.append(f"start:{on}")
+        if len(call_log) == 1:
+            # The first call blocks until the test explicitly lets it
+            # through, standing in for the observed 5+ s cloud latency.
+            await release_first.wait()
+        call_log.append(f"end:{on}")
+
+    manager._async_set_valve = slow_then_fast_set_valve
+
+    hass.states.async_set("switch.zone_1", "on")
+    # Let the first task start and block on the call. Deliberately not
+    # hass.async_block_till_done() here - that waits for *every* pending
+    # task, including this one, which is intentionally still parked.
+    for _ in range(3):
+        await asyncio.sleep(0)
+
+    # Simulate the device flapping back on while the first turn-off is
+    # still stuck mid-flight - the exact ordering observed live.
+    hass.states.async_set("switch.zone_1", "off")
+    await asyncio.sleep(0)
+    hass.states.async_set("switch.zone_1", "on")
+    for _ in range(3):
+        await asyncio.sleep(0)
+
+    # The second activation's task must be waiting on the lock, not
+    # already having made (and possibly lost) its own concurrent call.
+    assert call_log == ["start:False"]
+
+    release_first.set()
+    await hass.async_block_till_done()
+
+    # Only now does the second call get to start - strictly after the
+    # first one's call finished, never overlapping it.
+    assert call_log == ["start:False", "end:False", "start:False", "end:False"]
+
+
 async def test_attempt_counter_resets_after_a_quiet_window(hass: HomeAssistant) -> None:
     """Giving up must not be permanent - a zone that behaves for a while
     and then comes on again weeks later is a fresh incident, not the
