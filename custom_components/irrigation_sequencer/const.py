@@ -135,6 +135,15 @@ ATTR_AUTO_OFF_UNEXPECTED_ENABLED = "auto_off_unexpected_enabled"
 # in-flight.
 ATTR_UNEXPECTED_ACTIVATION_PHASE = "unexpected_activation_phase"
 ATTR_LAST_ZONE_EVENT_SEEN = "last_zone_event_seen"
+ATTR_LAST_ZONE_SAFETY_SWEEP = "last_zone_safety_sweep"
+
+# How often to compare every zone's *actual* state against what it should
+# be, independently of the state-change listener. Observed live: after
+# handling one activation, the listener stopped delivering any further
+# events for that entity - the zone went off and back on with nothing
+# arriving at all - so a zone switched on again moments later stayed on
+# indefinitely. Polling is the only thing that cannot be missed this way.
+ZONE_SAFETY_SWEEP_SECONDS = 15
 
 # How a zone came to be on outside a run, classified from the state
 # change's context (Home Assistant tags every state change with one):

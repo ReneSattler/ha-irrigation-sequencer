@@ -877,6 +877,89 @@ async def test_phase_attribute_tracks_an_in_flight_attempt_live(
     assert "switch.zone_1" not in manager.unexpected_activation_phase
 
 
+async def test_safety_sweep_catches_an_activation_the_listener_never_delivered(
+    hass: HomeAssistant,
+) -> None:
+    """The failure this whole sweep exists for, reproduced. Live, after one
+    activation had been handled end to end, the state-change listener
+    stopped delivering events for that entity: the zone's own history shows
+    it going off and back on 1.3 s apart with nothing arriving at all, so
+    it stayed on indefinitely. Detection cannot rest on an event that never
+    comes - reading the state directly is the part that cannot be missed."""
+    manager, calls = await _watching_manager(hass)
+
+    # Stand in for the listener going deaf, which is what was observed.
+    manager._unsub_zone_watch()
+    manager._unsub_zone_watch = None
+
+    hass.states.async_set("switch.zone_1", "on")
+    await hass.async_block_till_done()
+    assert calls == []  # nothing noticed it, exactly as live
+
+    await manager._async_zone_safety_sweep()
+
+    assert calls == [("switch.zone_1", False)]
+    assert manager.unexpected_zone_activations[-1]["turned_off"] is True
+
+
+async def test_safety_sweep_keeps_trying_while_the_zone_is_still_on(
+    hass: HomeAssistant,
+) -> None:
+    """A zone still reading "on" after a turn-off means the call did not
+    take, whatever it reported back. Water running is the thing that
+    matters, so the sweep goes by the zone's actual state rather than by
+    whether a service call claimed success."""
+    manager, calls = await _watching_manager(hass)
+    manager._unsub_zone_watch()
+    manager._unsub_zone_watch = None
+
+    hass.states.async_set("switch.zone_1", "on")
+    await hass.async_block_till_done()
+
+    for _ in range(3):
+        await manager._async_zone_safety_sweep()
+
+    assert calls == [("switch.zone_1", False)] * 3
+
+
+async def test_safety_sweep_leaves_a_person_s_zone_alone(hass: HomeAssistant) -> None:
+    """Polling must not turn the feature into something that fights the
+    user: a zone someone switched on themselves is still theirs to leave
+    running, and must be recorded once rather than re-recorded every
+    sweep for as long as it stays on."""
+    manager, calls = await _watching_manager(hass)
+    manager._unsub_zone_watch()
+    manager._unsub_zone_watch = None
+
+    hass.states.async_set(
+        "switch.zone_1", "on", context=Context(user_id="a-real-person")
+    )
+    await hass.async_block_till_done()
+
+    for _ in range(3):
+        await manager._async_zone_safety_sweep()
+
+    assert calls == []
+    assert len(manager.unexpected_zone_activations) == 1
+    assert manager.unexpected_zone_activations[0]["source"] == "ha_user"
+
+
+async def test_safety_sweep_stays_out_of_the_way_during_a_run(
+    hass: HomeAssistant,
+) -> None:
+    """Every zone is legitimately on at some point during a sequence. The
+    sweep must never mistake the run's own work for something to undo."""
+    manager, calls = await _watching_manager(hass)
+    manager._sequence_running = True
+
+    hass.states.async_set("switch.zone_1", "on")
+    await hass.async_block_till_done()
+    await manager._async_zone_safety_sweep()
+
+    assert calls == []
+    assert manager.unexpected_zone_activations == []
+
+
 async def test_attempt_counter_resets_after_a_quiet_window(hass: HomeAssistant) -> None:
     """Giving up must not be permanent - a zone that behaves for a while
     and then comes on again weeks later is a fresh incident, not the
