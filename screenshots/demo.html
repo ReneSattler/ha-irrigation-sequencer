@@ -158,6 +158,8 @@
       weather_effective_temp: 31,
       weather_current_factor: 2.1,
       notify_target: null,
+      auto_off_unexpected_enabled: true,
+      unexpected_zone_activations: [],
     };
     const recomputeEstimatedTotalSeconds = () => {
       // estimated_* stays unscaled (the start-time overlap check uses it);
@@ -247,6 +249,7 @@
       }
       if (service === "clear_rain_pause") statusAttrs.rain_pause_until = null;
       if (service === "set_winter_mode") statusAttrs.winter_mode = data.enabled;
+      if (service === "set_auto_off_unexpected") statusAttrs.auto_off_unexpected_enabled = data.enabled;
       if (service === "set_notify_target") statusAttrs.notify_target = data.target || null;
       if (service === "set_weather_adjustment") {
         Object.assign(statusAttrs, {
