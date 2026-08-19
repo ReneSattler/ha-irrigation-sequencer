@@ -260,12 +260,22 @@ what separates the cases:
 | Outside Home Assistant - vendor app, a button on the device, or the device itself (e.g. a relay set to power on after an outage) | yes | yes* | yes |
 | Already on when Home Assistant started | yes | yes* | yes |
 
-\* Controlled by the **"Turn off zones switched on outside a run"** switch
-(on by default, also in the settings card). Turn it off if you water
-manually from the valve vendor's own app - Home Assistant cannot tell that
-apart from the device switching itself on, since neither reaches it as
-anything more than "this entity is now on", so the guard would otherwise
-shut the water off under you. Reporting continues either way.
+\* Controlled by the **"Auto-off outside a run"** switch (on by default,
+also in the settings card). Turn it off if you water manually from the
+valve vendor's own app - Home Assistant cannot tell that apart from the
+device switching itself on, since neither reaches it as anything more than
+"this entity is now on", so the guard would otherwise shut the water off
+under you. Reporting continues either way.
+
+Closing the valve is never rate-limited - it happens on every single
+switch-on, however often it repeats, since skipping it even once means
+water kept running. Only the *reporting* (notification, log line, history
+entry) is throttled to one per zone per 30 s, so a flapping device can't
+bury you in push messages. If a device switches itself back on more than 5
+times within a minute despite being turned off each time, the integration
+stops fighting it and reports that once instead ("keeps switching itself
+on") - the far more useful signal, and a clear pointer to check the
+device's own settings.
 
 The history lives in the status sensor's `unexpected_zone_activations`
 attribute (survives a restart, which matters: the power-cut case usually
