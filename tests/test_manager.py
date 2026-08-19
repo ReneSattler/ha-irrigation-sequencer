@@ -771,14 +771,18 @@ async def test_a_hung_turn_off_call_times_out_instead_of_blocking_forever(
         0.05,
     ):
         hass.states.async_set("switch.zone_1", "on")
-        await asyncio.wait_for(hass.async_block_till_done(), timeout=2)
+        # Not async_block_till_done() - the hung call is deliberately left
+        # running past the timeout, so waiting for every pending task would
+        # wait on the very thing this test says we stop waiting for.
+        await asyncio.sleep(0.2)
 
     record = manager.unexpected_zone_activations[-1]
     assert record["turned_off"] is False
     assert "timed out" in record["error"]
 
     # The lock must have been released despite the timeout - a second
-    # activation (now with a working turn-off) is not stuck behind it.
+    # activation (now with a working turn-off) is not stuck behind it, and
+    # gets its own fresh call rather than joining the still-hung one.
     calls = []
 
     async def working_set_valve(entity_id, on):
@@ -786,9 +790,58 @@ async def test_a_hung_turn_off_call_times_out_instead_of_blocking_forever(
 
     manager._async_set_valve = working_set_valve
     hass.states.async_set("switch.zone_1", "off")
-    await hass.async_block_till_done()
+    await asyncio.sleep(0.05)
     hass.states.async_set("switch.zone_1", "on")
-    await asyncio.wait_for(hass.async_block_till_done(), timeout=2)
+    await asyncio.sleep(0.2)
+
+    assert calls == [("switch.zone_1", False)]
+
+    for task in list(manager._orphaned_off_tasks):
+        task.cancel()
+    await hass.async_block_till_done()
+
+
+async def test_timeout_holds_even_when_the_call_swallows_cancellation(
+    hass: HomeAssistant,
+) -> None:
+    """Reported live after the timeout was already in place: a zone sat at
+    phase "calling_off" for minutes, far past the timeout, so the timeout
+    plainly wasn't bounding anything. Awaiting the call directly means
+    asyncio.timeout has to cancel *that await*, and the cancellation has
+    to propagate back out through Home Assistant's service-call machinery
+    and the device integration underneath it - which it did not. Running
+    the call as its own shielded task makes giving up on waiting purely
+    our own decision, independent of whether anything downstream honours
+    cancellation at all."""
+    manager, _ = await _watching_manager(hass)
+
+    async def ignores_cancellation(entity_id, on):
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            # Swallowed rather than re-raised, exactly as observed
+            # downstream. Only the timeout's cancellation is absorbed; the
+            # test's own cleanup cancel below still ends the task.
+            await asyncio.Event().wait()
+
+    manager._async_set_valve = ignores_cancellation
+
+    with patch(
+        "custom_components.irrigation_sequencer.manager.AUTO_OFF_CALL_TIMEOUT_SECONDS",
+        0.05,
+    ):
+        hass.states.async_set("switch.zone_1", "on")
+        await asyncio.sleep(0.2)
+
+    # The handler moved on regardless, rather than sitting at "calling_off".
+    assert manager.unexpected_activation_phase["switch.zone_1"] == "timed_out"
+    record = manager.unexpected_zone_activations[-1]
+    assert record["turned_off"] is False
+    assert "timed out" in record["error"]
+
+    for task in list(manager._orphaned_off_tasks):
+        task.cancel()
+    await asyncio.sleep(0)
 
 
 async def test_phase_attribute_tracks_an_in_flight_attempt_live(
