@@ -682,26 +682,55 @@ async def test_rapid_repeat_is_still_turned_off_but_reported_once(
     assert len(manager.unexpected_zone_activations) == 1
 
 
-async def test_device_that_keeps_switching_itself_on_is_given_up_on(
+async def test_device_that_will_not_close_is_given_up_on(
     hass: HomeAssistant,
 ) -> None:
-    """Not throttling the turn-off means a device that insists on coming
-    back would otherwise trade service calls with us forever. After a
-    bounded number of attempts it stops and says so - which is the far
-    more useful outcome, since it names a problem the user has to fix on
-    the device itself."""
+    """Not throttling the turn-off means a device that will not respond
+    would otherwise trade service calls with us forever. After a bounded
+    number of failures it stops and says so - which is the far more useful
+    outcome, since it names a problem the user has to fix on the device
+    itself."""
     manager, calls = await _watching_manager(hass)
 
-    for _ in range(8):
-        hass.states.async_set("switch.zone_1", "on")
-        await hass.async_block_till_done()
-        hass.states.async_set("switch.zone_1", "off")
-        await hass.async_block_till_done()
+    # Accepts every call, reports success, never actually closes.
+    async def accepted_but_ignored(eid, on):
+        calls.append((eid, on))
 
-    assert len(calls) == 5  # MAX_AUTO_OFF_ATTEMPTS, then it stops trying
+    manager._async_set_valve = accepted_but_ignored
+
+    with patch(
+        "custom_components.irrigation_sequencer.manager.AUTO_OFF_VERIFY_SECONDS",
+        0.05,
+    ):
+        for _ in range(8):
+            hass.states.async_set("switch.zone_1", "on")
+            await hass.async_block_till_done()
+            hass.states.async_set("switch.zone_1", "off")
+            await hass.async_block_till_done()
+
+    assert len(calls) == 5  # MAX_AUTO_OFF_ATTEMPTS failures, then it stops
     giving_up = [r for r in manager.unexpected_zone_activations if r.get("gave_up")]
     assert len(giving_up) == 1
     assert giving_up[0]["turned_off"] is False
+
+
+async def test_a_zone_that_closes_every_time_is_never_given_up_on(
+    hass: HomeAssistant,
+) -> None:
+    """Found live while testing by hand: switching a zone on repeatedly
+    tripped the give-up guard even though every single turn-off had
+    worked, and the zone was then left open. A device that closes whenever
+    it is asked is not fighting anyone - only one that refuses to close
+    is worth giving up on."""
+    manager, calls = await _watching_manager(hass)
+
+    for _ in range(12):
+        hass.states.async_set("switch.zone_1", "on")
+        await hass.async_block_till_done()
+
+    assert len(calls) == 12
+    assert manager._gave_up_announced == set()
+    assert not [r for r in manager.unexpected_zone_activations if r.get("gave_up")]
 
 
 async def test_overlapping_activations_do_not_race_the_turn_off_call(
@@ -976,7 +1005,7 @@ async def test_giving_up_wears_off_so_a_zone_is_never_left_on_for_good(
 
         # Once the attempt window has passed, the zone - still on - has to
         # get another round rather than being written off.
-        manager._auto_off_attempts["switch.zone_1"] = (
+        manager._auto_off_failures["switch.zone_1"] = (
             5,
             time.monotonic() - AUTO_OFF_ATTEMPT_WINDOW_SECONDS - 1,
         )
@@ -1023,27 +1052,36 @@ async def test_safety_sweep_stays_out_of_the_way_during_a_run(
     assert manager.unexpected_zone_activations == []
 
 
-async def test_attempt_counter_resets_after_a_quiet_window(hass: HomeAssistant) -> None:
+async def test_failure_counter_resets_after_a_quiet_window(hass: HomeAssistant) -> None:
     """Giving up must not be permanent - a zone that behaves for a while
     and then comes on again weeks later is a fresh incident, not the
     continuation of an old one."""
     manager, calls = await _watching_manager(hass)
 
-    for _ in range(6):
+    async def accepted_but_ignored(eid, on):
+        calls.append((eid, on))
+
+    manager._async_set_valve = accepted_but_ignored
+
+    with patch(
+        "custom_components.irrigation_sequencer.manager.AUTO_OFF_VERIFY_SECONDS",
+        0.05,
+    ):
+        for _ in range(6):
+            hass.states.async_set("switch.zone_1", "on")
+            await hass.async_block_till_done()
+            hass.states.async_set("switch.zone_1", "off")
+            await hass.async_block_till_done()
+        assert len(calls) == 5
+
+        # Pretend the burst happened a couple of minutes ago.
+        manager._auto_off_failures = {}
+        manager._unexpected_reported_at = {}
+        manager._gave_up_announced = set()
+
         hass.states.async_set("switch.zone_1", "on")
         await hass.async_block_till_done()
-        hass.states.async_set("switch.zone_1", "off")
-        await hass.async_block_till_done()
-    assert len(calls) == 5
-
-    # Pretend the burst happened a couple of minutes ago.
-    manager._auto_off_attempts = {}
-    manager._unexpected_reported_at = {}
-    manager._gave_up_announced = set()
-
-    hass.states.async_set("switch.zone_1", "on")
-    await hass.async_block_till_done()
-    assert len(calls) == 6
+        assert len(calls) == 6
 
 
 async def test_unexpected_activations_persist_across_reload(hass: HomeAssistant) -> None:

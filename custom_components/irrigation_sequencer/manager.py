@@ -169,10 +169,12 @@ class IrrigationSequencerManager:
         # Last time an activation of this entity was *reported* (record,
         # log, notification). Closing the valve is not throttled by this.
         self._unexpected_reported_at: dict[str, float] = {}
-        # Consecutive auto-off attempts per entity as (count, first_at), so
-        # a device that keeps switching itself back on can be given up on
-        # instead of traded service calls with forever.
-        self._auto_off_attempts: dict[str, tuple[int, float]] = {}
+        # Turn-offs that did not close the zone, per entity, as
+        # (count, first_at) - so a device that will not respond can be
+        # given up on instead of traded service calls with forever. Only
+        # failures count: a zone that closes every time it is asked is
+        # working no matter how often it is switched on.
+        self._auto_off_failures: dict[str, tuple[int, float]] = {}
         # One lock per zone entity, created on first use. A second
         # activation for a zone already being handled waits for the first
         # to finish its turn-off call before making its own, instead of
@@ -553,8 +555,10 @@ class IrrigationSequencerManager:
                 _LOGGER.info("Zone %s: lock acquired", entity_id)
                 self.unexpected_activation_phase[entity_id] = "lock_acquired"
                 self._notify_listeners()
-                attempts = self._count_auto_off_attempt(entity_id, now)
-                if attempts > MAX_AUTO_OFF_ATTEMPTS:
+                failures, window_start = self._auto_off_failures_in_window(
+                    entity_id, now
+                )
+                if failures >= MAX_AUTO_OFF_ATTEMPTS:
                     gave_up = True
                     first_give_up = entity_id not in self._gave_up_announced
                     self._gave_up_announced.add(entity_id)
@@ -563,9 +567,10 @@ class IrrigationSequencerManager:
                 else:
                     try:
                         _LOGGER.info(
-                            "Zone %s: calling turn-off (attempt %d, timeout %ds)",
+                            "Zone %s: calling turn-off (%d failed attempt(s) so "
+                            "far, timeout %ds)",
                             entity_id,
-                            attempts,
+                            failures,
                             AUTO_OFF_CALL_TIMEOUT_SECONDS,
                         )
                         self.unexpected_activation_phase[entity_id] = "calling_off"
@@ -643,6 +648,15 @@ class IrrigationSequencerManager:
                         _LOGGER.error(
                             "Could not turn zone %s back off: %s", entity_id, err
                         )
+
+                    # Only a zone that would not close counts towards giving
+                    # up. A zone that closes every time it is asked is not
+                    # fighting anyone, however often it is switched on - and
+                    # counting those was enough to trip the guard during
+                    # ordinary manual testing.
+                    self._record_auto_off_outcome(
+                        entity_id, failures, window_start, turned_off
+                    )
 
         # Having already given up is not news. The sweep keeps coming back
         # to a zone it gave up on so the attempt window can re-arm and try
@@ -726,9 +740,10 @@ class IrrigationSequencerManager:
             state = self.hass.states.get(entity_id)
             if state is None or state.state != on_state:
                 return True
-            if time.monotonic() >= deadline:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
                 return False
-            await asyncio.sleep(AUTO_OFF_VERIFY_POLL_SECONDS)
+            await asyncio.sleep(min(AUTO_OFF_VERIFY_POLL_SECONDS, remaining))
 
     @callback
     def _on_off_task_done(self, entity_id: str, task: asyncio.Task) -> None:
@@ -762,19 +777,34 @@ class IrrigationSequencerManager:
             self.unexpected_activation_phase.pop(entity_id, None)
             self._notify_listeners()
 
-    def _count_auto_off_attempt(self, entity_id: str, now: float) -> int:
-        """Number of auto-off attempts for this zone in the current burst.
+    def _auto_off_failures_in_window(
+        self, entity_id: str, now: float
+    ) -> tuple[int, float]:
+        """Failed turn-offs for this zone in the current burst, and when
+        that burst started.
 
-        A zone that stays off for a full window starts counting again, so
-        an ordinary repeat weeks later is never treated as a continuation
-        of an old one."""
-        count, first_at = self._auto_off_attempts.get(entity_id, (0, now))
+        Failures, not attempts: a zone that closes whenever it is asked is
+        working, however many times someone switches it on. Counting those
+        was enough to trip the give-up guard during ordinary manual
+        testing, which then left the zone open. A burst that goes quiet for
+        a full window starts over, so an unrelated repeat weeks later is
+        never read as a continuation of an old one."""
+        failures, first_at = self._auto_off_failures.get(entity_id, (0, now))
         if now - first_at > AUTO_OFF_ATTEMPT_WINDOW_SECONDS:
-            count, first_at = 0, now
+            failures, first_at = 0, now
             self._gave_up_announced.discard(entity_id)
-        count += 1
-        self._auto_off_attempts[entity_id] = (count, first_at)
-        return count
+            self._auto_off_failures.pop(entity_id, None)
+        return failures, first_at
+
+    def _record_auto_off_outcome(
+        self, entity_id: str, failures: int, window_start: float, turned_off: bool
+    ) -> None:
+        """A close that worked clears the slate; one that didn't counts."""
+        if turned_off:
+            self._auto_off_failures.pop(entity_id, None)
+            self._gave_up_announced.discard(entity_id)
+        else:
+            self._auto_off_failures[entity_id] = (failures + 1, window_start)
 
     def _zone_display_name(self, entity_id: str) -> str:
         """The zone's custom name if it has one, else whatever Home
