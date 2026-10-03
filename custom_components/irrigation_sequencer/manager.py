@@ -93,6 +93,7 @@ class IrrigationSequencerManager:
                 "name": "",
                 "duration_minutes": DEFAULT_ZONE_DURATION_MINUTES,
                 "position": index,
+                "enabled": True,
             }
             for index, entity_id in enumerate(zone_entities)
         ]
@@ -223,6 +224,10 @@ class IrrigationSequencerManager:
                         "duration_minutes", DEFAULT_ZONE_DURATION_MINUTES
                     )
                     zone["position"] = stored.get("position", zone["position"])
+                    # Stored configs from before the flag existed have no
+                    # key at all - those zones stay enabled, same as new
+                    # zones added through the options flow.
+                    zone["enabled"] = bool(stored.get("enabled", True))
             self.zones.sort(key=lambda z: z["position"])
 
             self.pause_between_zones_seconds = data.get(
@@ -909,6 +914,35 @@ class IrrigationSequencerManager:
         await self._async_save()
         self._notify_listeners()
 
+    def _enabled_zones(self) -> list[dict[str, Any]]:
+        """Zones taking part in the sequence, in run order. Everything the
+        run prices, iterates or counts is derived from this, so a disabled
+        zone contributes nothing anywhere - no valve action, no time."""
+        return [zone for zone in self.zones if zone.get("enabled", True)]
+
+    def _full_index_of(self, entity_id: str) -> int | None:
+        """Position in the full zone list. current/last_zone_index always
+        refer to the full list (the card renders from it too), even though
+        the run itself only iterates the enabled subset."""
+        for index, zone in enumerate(self.zones):
+            if zone["entity_id"] == entity_id:
+                return index
+        return None
+
+    async def async_set_zone_enabled(self, entity_id: str, enabled: bool) -> None:
+        if not any(z["entity_id"] == entity_id for z in self.zones):
+            return
+        wanted = bool(enabled)
+        # New list/dicts, not an in-place edit - see async_set_zone_duration
+        # for why mutating the shared zones object breaks state change
+        # detection.
+        self.zones = [
+            {**z, "enabled": wanted} if z["entity_id"] == entity_id else z
+            for z in self.zones
+        ]
+        await self._async_save()
+        self._notify_listeners()
+
     async def async_set_zone_name(self, entity_id: str, name: str) -> None:
         if not any(z["entity_id"] == entity_id for z in self.zones):
             return
@@ -1174,6 +1208,10 @@ class IrrigationSequencerManager:
             _LOGGER.warning("No zones configured, aborting start")
             return
 
+        if not self._enabled_zones():
+            _LOGGER.warning("All zones are disabled, aborting start")
+            return
+
         self._stop_requested = False
         self._run_task = self.hass.async_create_task(self._async_run_sequence())
 
@@ -1255,9 +1293,11 @@ class IrrigationSequencerManager:
         """Sequence duration estimate from the currently configured zone
         durations and pauses, without the weather factor (unknowable ahead
         of the actual run). Used for the start-times overlap check and
-        exposed to the card for the same client-side check."""
-        return sum(zone["duration_minutes"] * 60 for zone in self.zones) + (
-            self.pause_between_zones_seconds * max(0, len(self.zones) - 1)
+        exposed to the card for the same client-side check. Only enabled
+        zones count - a disabled zone contributes no time anywhere."""
+        enabled = self._enabled_zones()
+        return sum(zone["duration_minutes"] * 60 for zone in enabled) + (
+            self.pause_between_zones_seconds * max(0, len(enabled) - 1)
         )
 
     @property
@@ -1267,8 +1307,9 @@ class IrrigationSequencerManager:
         separate from estimated_total_seconds, which stays unscaled because
         the start-time overlap check is validated against it and must not
         shift with the weather."""
-        return sum(self._zone_duration_seconds(zone) for zone in self.zones) + (
-            self.pause_between_zones_seconds * max(0, len(self.zones) - 1)
+        enabled = self._enabled_zones()
+        return sum(self._zone_duration_seconds(zone) for zone in enabled) + (
+            self.pause_between_zones_seconds * max(0, len(enabled) - 1)
         )
 
     def _zone_seconds_for(self, entity_id: str) -> int:
@@ -1281,12 +1322,17 @@ class IrrigationSequencerManager:
                 return self._zone_duration_seconds(zone)
         return 0
 
-    def _remaining_after(self, index: int, head_seconds: int, include_next_pause: bool) -> int:
+    def _remaining_after(
+        self, zones: list[dict[str, Any]], index: int, head_seconds: int, include_next_pause: bool
+    ) -> int:
         """Total seconds left: whatever is left of the current phase plus
         every zone and pause still to come, priced at the *current*
-        configuration so the countdown never contradicts the timeline."""
-        later = self.zones[index + 1 :]
-        rest = sum(self._zone_duration_seconds(zone) for zone in later)
+        configuration so the countdown never contradicts the timeline.
+        Callers pass the run's zone snapshot, so toggling a zone mid-run
+        never shifts positions under the countdown - membership is frozen
+        at run start while durations stay live (re-read by entity id)."""
+        later = zones[index + 1 :]
+        rest = sum(self._zone_seconds_for(zone["entity_id"]) for zone in later)
         pauses = self.pause_between_zones_seconds * (
             len(later) if include_next_pause else max(0, len(later) - 1)
         )
@@ -1300,9 +1346,16 @@ class IrrigationSequencerManager:
         await self.async_refresh_forecast()
         # Snapshot the order so the iteration stays stable, but always look
         # durations up by entity id - self.zones is replaced wholesale on
-        # every change.
-        planned = list(self.zones)
-        self.seconds_remaining_total = self._remaining_after(-1, 0, include_next_pause=False)
+        # every change. Only enabled zones run; current/last_zone_index
+        # still point into the full list (which the card renders from).
+        planned = self._enabled_zones()
+        if not planned:
+            _LOGGER.warning("All zones are disabled, aborting run")
+            self._sequence_running = False
+            return
+        self.seconds_remaining_total = self._remaining_after(
+            planned, -1, 0, include_next_pause=False
+        )
         run_elapsed = 0
         self.last_run_zones = []
         _LOGGER.info(
@@ -1322,15 +1375,15 @@ class IrrigationSequencerManager:
                     break
 
                 entity_id = planned_zone["entity_id"]
-                self.current_zone_index = index
-                self.last_zone_index = index
+                self.current_zone_index = self._full_index_of(entity_id)
+                self.last_zone_index = self._full_index_of(entity_id)
                 self.status = STATE_RUNNING
                 zone_elapsed = 0
                 target_at_start = self._zone_seconds_for(entity_id)
                 factor_at_start = self.weather_current_factor
                 self.seconds_remaining_zone = target_at_start
                 self.seconds_remaining_total = self._remaining_after(
-                    index, self.seconds_remaining_zone, include_next_pause=True
+                    planned, index, self.seconds_remaining_zone, include_next_pause=True
                 )
                 self._notify_listeners()
                 _LOGGER.info(
@@ -1385,7 +1438,7 @@ class IrrigationSequencerManager:
                         0, self._zone_seconds_for(entity_id) - zone_elapsed
                     )
                     self.seconds_remaining_total = self._remaining_after(
-                        index, self.seconds_remaining_zone, include_next_pause=True
+                        planned, index, self.seconds_remaining_zone, include_next_pause=True
                     )
                     self._notify_listeners()
                 await self._async_set_valve(entity_id, False)
@@ -1435,7 +1488,7 @@ class IrrigationSequencerManager:
                         run_elapsed += 1
                         pause_left = max(0, self.pause_between_zones_seconds - pause_elapsed)
                         self.seconds_remaining_total = self._remaining_after(
-                            index, pause_left, include_next_pause=False
+                            planned, index, pause_left, include_next_pause=False
                         )
                         self._notify_listeners()
         finally:

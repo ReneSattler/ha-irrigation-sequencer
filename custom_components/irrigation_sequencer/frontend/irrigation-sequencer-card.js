@@ -42,7 +42,8 @@ const TRANSLATIONS = {
     },
     statusCardTitle: "Irrigation",
     settingsCardTitle: "Irrigation settings",
-    zonesLabel: (n) => `${n} zones`,
+    zonesLabel: (n, total) => (total != null && n !== total ? `${n} of ${total} zones` : `${n} zones`),
+    zoneEnabled: "Zone enabled",
     pauseBetweenZones: "Pause between zones",
     nightStart: "Automatic start",
     addTime: "Add time",
@@ -106,7 +107,8 @@ const TRANSLATIONS = {
     },
     statusCardTitle: "Bewässerung",
     settingsCardTitle: "Bewässerungseinstellungen",
-    zonesLabel: (n) => `${n} Zonen`,
+    zonesLabel: (n, total) => (total != null && n !== total ? `${n} von ${total} Zonen` : `${n} Zonen`),
+    zoneEnabled: "Zone aktiv",
     pauseBetweenZones: "Pause zwischen Zonen",
     nightStart: "Automatischer Start",
     addTime: "Zeit hinzufügen",
@@ -497,7 +499,12 @@ class IrrigationSequencerBaseCard extends HTMLElement {
 
   /** Proportional zone/pause timeline. Segments are colored done/active/upcoming
    * based on last_zone_index (persists through the pause after a zone) and
-   * current_zone_index (set only while a zone is actively running). */
+   * current_zone_index (set only while a zone is actively running).
+   * Disabled zones are left out entirely - both count on the backend only
+   * enabled zones, so the bar and the totals stay in agreement. The one
+   * exception is a zone disabled mid-run: the run still finishes it (the
+   * membership snapshot is taken at run start), so it stays visible while
+   * it is the active one. */
   _renderTimeline(zones, attrs, t) {
     // Math.max(1, NaN) is NaN, not 1 - so a missing/invalid duration used to
     // survive all the way into `flex-grow:NaN`, which browsers reject,
@@ -510,12 +517,22 @@ class IrrigationSequencerBaseCard extends HTMLElement {
       return Number.isFinite(n) && n > 0 ? n : fallback;
     };
     const factor = positiveOr(attrs.weather_current_factor, 1);
-    const isRunning = attrs.current_zone_index != null;
-    const isPaused = !isRunning && attrs.last_zone_index != null && attrs.seconds_remaining_total > 0;
-    const lastIndex = attrs.last_zone_index;
+    const runningId =
+      attrs.current_zone_index != null ? zones[attrs.current_zone_index]?.entity_id : null;
+    const visibleZones = zones.filter((z) => z.enabled !== false || z.entity_id === runningId);
+    const visibleIndexOf = (fullIndex) => {
+      if (fullIndex == null || zones[fullIndex] == null) return null;
+      const found = visibleZones.findIndex((z) => z.entity_id === zones[fullIndex].entity_id);
+      return found >= 0 ? found : null;
+    };
+    const currentVisible = visibleIndexOf(attrs.current_zone_index);
+    const lastVisible = visibleIndexOf(attrs.last_zone_index);
+    const isRunning = currentVisible != null;
+    const isPaused = !isRunning && lastVisible != null && attrs.seconds_remaining_total > 0;
+    const lastIndex = lastVisible;
 
     const segments = [];
-    zones.forEach((zone, index) => {
+    visibleZones.forEach((zone, index) => {
       const durationMinutes = positiveOr(zone.duration_minutes, DEFAULT_ZONE_DURATION_MINUTES);
       const seconds = Math.max(1, Math.round(durationMinutes * 60 * factor));
       let cls = "zone-upcoming";
@@ -539,7 +556,7 @@ class IrrigationSequencerBaseCard extends HTMLElement {
       });
 
       const pauseSeconds = positiveOr(attrs.pause_between_zones_seconds, 0);
-      if (index < zones.length - 1 && pauseSeconds > 0) {
+      if (index < visibleZones.length - 1 && pauseSeconds > 0) {
         let pauseCls = "pause-upcoming";
         if (isPaused && index === lastIndex) pauseCls = "pause-active";
         else if (lastIndex != null && index < lastIndex) pauseCls = "pause-done";
@@ -662,6 +679,8 @@ class IrrigationSequencerBaseCard extends HTMLElement {
       .not-found { padding: 16px; color: var(--error-color); }
       .drag-handle { cursor: grab; color: var(--secondary-text-color); flex-shrink: 0; }
       .zone-row.drag-over { outline: 2px dashed var(--primary-color); }
+      .zone-row.zone-disabled { opacity: 0.6; }
+      .zone-row .switch { flex-shrink: 0; }
 
       /* Timeline: proportional zone/pause segments in irrigation order */
       .timeline { display: flex; gap: 3px; height: 30px; margin-top: 12px; }
@@ -752,9 +771,10 @@ class IrrigationSequencerStatusCard extends IrrigationSequencerBaseCard {
     // Naming the upcoming zone here adds information instead.
     const nextZone =
       !activeZone && attrs.last_zone_index != null ? zones[attrs.last_zone_index + 1] : null;
+    const enabledZones = zones.filter((z) => z.enabled !== false);
     const totalPlanned =
-      zones.reduce((sum, z) => sum + Math.round(z.duration_minutes * 60 * (attrs.weather_current_factor || 1)), 0) +
-      attrs.pause_between_zones_seconds * Math.max(0, zones.length - 1);
+      enabledZones.reduce((sum, z) => sum + Math.round(z.duration_minutes * 60 * (attrs.weather_current_factor || 1)), 0) +
+      attrs.pause_between_zones_seconds * Math.max(0, enabledZones.length - 1);
     const remaining = attrs.seconds_remaining_total || 0;
     const pct = isBusy && totalPlanned > 0 ? Math.max(0, Math.min(100, 100 - (remaining / totalPlanned) * 100)) : 0;
 
@@ -918,7 +938,7 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
           <div class="tile-icon"><ha-icon icon="mdi:tune-variant"></ha-icon></div>
           <div class="tile-text">
             <div class="tile-primary">${title}</div>
-            <div class="tile-secondary">${t.zonesLabel(zones.length)}</div>
+            <div class="tile-secondary">${t.zonesLabel(zones.filter((z) => z.enabled !== false).length, zones.length)}</div>
           </div>
         </div>
 
@@ -1023,9 +1043,14 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
     // instead of depending on the render-suppression timers firing in
     // exactly the right order relative to the backend round trip.
     const durationMinutes = this._pendingZoneDurations?.get(zone.entity_id) ?? zone.duration_minutes;
+    const enabled = zone.enabled !== false;
     return `
-      <div class="tile-row zone-row" style="--tile-color: var(--success-color, #4caf50);" data-index="${index}" data-entity="${zone.entity_id}">
+      <div class="tile-row zone-row ${enabled ? "" : "zone-disabled"}" style="--tile-color: var(--success-color, #4caf50);" data-index="${index}" data-entity="${zone.entity_id}">
         <div class="drag-handle" draggable="true" title="${t.dragHandle}"><ha-icon icon="mdi:drag-vertical"></ha-icon></div>
+        <label class="switch" title="${t.zoneEnabled}">
+          <input type="checkbox" class="zone-enabled" data-entity="${zone.entity_id}" ${enabled ? "checked" : ""} />
+          <span class="slider-toggle"></span>
+        </label>
         <div class="tile-row-icon"><ha-icon icon="mdi:sprinkler"></ha-icon></div>
         <div class="tile-row-control" style="flex-direction: column; align-items: stretch; gap: 6px;">
           <input type="text" class="zone-name" data-entity="${zone.entity_id}" placeholder="${t.zoneNamePlaceholder}" value="${zoneDisplayName(this._hass, zone)}" />
@@ -1278,6 +1303,17 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
           this._callService("set_zone_name", {
             entity_id: e.target.dataset.entity,
             name: e.target.value,
+          })
+        );
+      });
+    });
+
+    root.querySelectorAll(".zone-enabled").forEach((input) => {
+      input.addEventListener("change", (e) => {
+        this._releaseRenderSuppression(
+          this._callService("set_zone_enabled", {
+            entity_id: e.target.dataset.entity,
+            enabled: e.target.checked,
           })
         );
       });

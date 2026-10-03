@@ -487,10 +487,16 @@ async def test_remaining_total_reflects_current_config(hass: HomeAssistant) -> N
     manager.pause_between_zones_seconds = 120
 
     # Standing at the start of zone 0 with its full 10 minutes left.
-    assert manager._remaining_after(0, 600, include_next_pause=True) == 600 + 600 + 120
+    assert (
+        manager._remaining_after(manager.zones, 0, 600, include_next_pause=True)
+        == 600 + 600 + 120
+    )
 
     await manager.async_set_zone_duration("switch.zone_2", 5)
-    assert manager._remaining_after(0, 600, include_next_pause=True) == 600 + 300 + 120
+    assert (
+        manager._remaining_after(manager.zones, 0, 600, include_next_pause=True)
+        == 600 + 300 + 120
+    )
 
 
 async def test_last_run_zones_persists_across_reload(hass: HomeAssistant) -> None:
@@ -1358,3 +1364,140 @@ async def test_zone_already_on_at_startup_is_flagged(hass: HomeAssistant) -> Non
     assert calls == [("switch.zone_1", False)]
     assert len(manager.unexpected_zone_activations) == 1
     assert manager.unexpected_zone_activations[0]["source"] == "already_on_at_startup"
+
+
+# --------------------------------------------------------------------- #
+# Per-zone enable/disable
+# --------------------------------------------------------------------- #
+
+
+async def test_disabled_zone_is_skipped_and_contributes_no_time(
+    hass: HomeAssistant,
+) -> None:
+    """Disabling a zone removes it from the run completely: its valve is
+    never opened and no total - estimate, scaled total, countdown -
+    contains a second of it."""
+    manager = make_manager(hass, ["switch.zone_1", "switch.zone_2", "switch.zone_3"])
+    for entity_id in ("switch.zone_1", "switch.zone_2", "switch.zone_3"):
+        await manager.async_set_zone_duration(entity_id, 1)
+    manager.pause_between_zones_seconds = 0
+    await manager.async_set_zone_enabled("switch.zone_2", False)
+
+    assert manager.estimated_total_seconds == 120
+    assert manager.scaled_total_seconds == 120
+
+    calls = []
+
+    async def fake_set_valve(eid, on):
+        calls.append((eid, on))
+
+    manager._async_set_valve = fake_set_valve
+
+    with patch("asyncio.sleep", _instant_sleep):
+        await asyncio.wait_for(manager._async_run_sequence(), timeout=5)
+
+    assert manager.status == "idle"
+    assert [z["entity_id"] for z in manager.last_run_zones] == [
+        "switch.zone_1",
+        "switch.zone_3",
+    ]
+    # The disabled valve is never *opened* (the run's fail-safe finally
+    # block still sends everything a close, which is harmless by design).
+    assert ("switch.zone_2", True) not in calls
+    # current/last indices still point into the full zone list, which is
+    # what the card renders its timeline from.
+    assert manager.last_run_zones[0]["actual_elapsed_seconds"] == 60
+
+
+async def test_start_is_refused_when_all_zones_disabled(
+    hass: HomeAssistant,
+) -> None:
+    manager = make_manager(hass, ["switch.zone_1"])
+    await manager.async_set_zone_enabled("switch.zone_1", False)
+
+    calls = []
+
+    async def fake_set_valve(eid, on):
+        calls.append((eid, on))
+
+    manager._async_set_valve = fake_set_valve
+
+    with patch("asyncio.sleep", _instant_sleep):
+        await manager.async_start_now()
+        # No run task that does anything - and nothing opened.
+        if manager._run_task is not None:
+            await asyncio.wait_for(manager._run_task, timeout=5)
+
+    assert manager.status == "idle"
+    assert calls == []
+    assert manager.last_run_zones == []
+
+
+async def test_zone_enabled_flag_persists_across_reload(
+    hass: HomeAssistant,
+) -> None:
+    manager = make_manager(hass, ["switch.zone_1", "switch.zone_2"])
+    await manager.async_set_zone_enabled("switch.zone_2", False)
+    # Zones added fresh (and configs from before the flag existed) default
+    # to enabled.
+    assert manager.zones[0].get("enabled", True) is True
+    assert manager.zones[1]["enabled"] is False
+
+    reloaded = make_manager(hass, ["switch.zone_1", "switch.zone_2"])
+    await reloaded.async_load()
+    assert reloaded.zones[0]["enabled"] is True
+    assert reloaded.zones[1]["enabled"] is False
+
+
+async def test_set_zone_enabled_unknown_entity_is_noop(
+    hass: HomeAssistant,
+) -> None:
+    manager = make_manager(hass, ["switch.zone_1"])
+    original = list(manager.zones)
+    await manager.async_set_zone_enabled("switch.does_not_exist", False)
+    assert manager.zones == original
+
+
+async def test_start_times_overlap_check_ignores_disabled_zones(
+    hass: HomeAssistant,
+) -> None:
+    """The overlap guard prices a full run - with a zone disabled the run
+    is shorter, so times that used to collide become acceptable."""
+    manager = make_manager(hass, ["switch.zone_1", "switch.zone_2"])
+    await manager.async_set_zone_duration("switch.zone_1", 10)
+    await manager.async_set_zone_duration("switch.zone_2", 10)
+    manager.pause_between_zones_seconds = 0
+
+    with pytest.raises(ServiceValidationError):
+        await manager.async_set_start_times(["05:00:00", "05:15:00"])
+
+    await manager.async_set_zone_enabled("switch.zone_2", False)
+    await manager.async_set_start_times(["05:00:00", "05:15:00"])
+    assert manager.start_times == ["05:00:00", "05:15:00"]
+
+
+async def test_set_zone_enabled_service_is_registered(
+    hass: HomeAssistant,
+) -> None:
+    """The settings card toggle calls set_zone_enabled - the service has
+    to exist and reach the manager."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.irrigation_sequencer.const import CONF_ZONE_ENTITIES, DOMAIN
+
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={CONF_ZONE_ENTITIES: ["switch.zone_1"]}
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.services.has_service(DOMAIN, "set_zone_enabled")
+    await hass.services.async_call(
+        DOMAIN,
+        "set_zone_enabled",
+        {"entry_id": entry.entry_id, "entity_id": "switch.zone_1", "enabled": False},
+        blocking=True,
+    )
+    manager = hass.data[DOMAIN][entry.entry_id]
+    assert manager.zones[0]["enabled"] is False

@@ -51,6 +51,7 @@ from .const import (
     SERVICE_SET_WEATHER_ADJUSTMENT,
     SERVICE_SET_WINTER_MODE,
     SERVICE_SET_ZONE_DURATION,
+    SERVICE_SET_ZONE_ENABLED,
     SERVICE_SET_ZONE_NAME,
     SERVICE_SET_ZONE_ORDER,
     SERVICE_PAUSE,
@@ -79,6 +80,13 @@ SET_ZONE_NAME_SCHEMA = vol.Schema(
         vol.Required("entry_id"): cv.string,
         vol.Required("entity_id"): cv.entity_id,
         vol.Required("name"): cv.string,
+    }
+)
+SET_ZONE_ENABLED_SCHEMA = vol.Schema(
+    {
+        vol.Required("entry_id"): cv.string,
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("enabled"): cv.boolean,
     }
 )
 SET_PAUSE_SCHEMA = vol.Schema(
@@ -313,6 +321,10 @@ def _async_register_services(hass: HomeAssistant) -> None:
         manager = _get_manager(hass, call.data["entry_id"])
         await manager.async_set_zone_name(call.data["entity_id"], call.data["name"])
 
+    async def handle_set_zone_enabled(call: ServiceCall) -> None:
+        manager = _get_manager(hass, call.data["entry_id"])
+        await manager.async_set_zone_enabled(call.data["entity_id"], call.data["enabled"])
+
     async def handle_set_pause(call: ServiceCall) -> None:
         manager = _get_manager(hass, call.data["entry_id"])
         await manager.async_set_pause_between_zones(call.data["seconds"])
@@ -379,6 +391,12 @@ def _async_register_services(hass: HomeAssistant) -> None:
     )
     hass.services.async_register(
         DOMAIN, SERVICE_SET_ZONE_NAME, handle_set_zone_name, schema=SET_ZONE_NAME_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_ZONE_ENABLED,
+        handle_set_zone_enabled,
+        schema=SET_ZONE_ENABLED_SCHEMA,
     )
     hass.services.async_register(
         DOMAIN, SERVICE_SET_PAUSE_BETWEEN_ZONES, handle_set_pause, schema=SET_PAUSE_SCHEMA

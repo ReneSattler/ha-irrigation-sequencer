@@ -165,14 +165,16 @@
     const recomputeEstimatedTotalSeconds = () => {
       // estimated_* stays unscaled (the start-time overlap check uses it);
       // scaled_* carries the weather factor, like the real integration.
+      // Both count enabled zones only, like the backend.
+      const enabled = statusAttrs.zones.filter((z) => z.enabled !== false);
       statusAttrs.estimated_total_seconds =
-        statusAttrs.zones.reduce((sum, z) => sum + z.duration_minutes * 60, 0) +
-        statusAttrs.pause_between_zones_seconds * Math.max(0, statusAttrs.zones.length - 1);
+        enabled.reduce((sum, z) => sum + z.duration_minutes * 60, 0) +
+        statusAttrs.pause_between_zones_seconds * Math.max(0, enabled.length - 1);
       statusAttrs.scaled_total_seconds =
-        statusAttrs.zones.reduce(
+        enabled.reduce(
           (sum, z) => sum + Math.round(z.duration_minutes * 60 * (statusAttrs.weather_current_factor || 1)),
           0
-        ) + statusAttrs.pause_between_zones_seconds * Math.max(0, statusAttrs.zones.length - 1);
+        ) + statusAttrs.pause_between_zones_seconds * Math.max(0, enabled.length - 1);
     };
     recomputeEstimatedTotalSeconds();
 
@@ -239,6 +241,10 @@
         recomputeEstimatedTotalSeconds();
       }
       if (service === "set_zone_name" && zone(data.entity_id)) zone(data.entity_id).name = data.name;
+      if (service === "set_zone_enabled" && zone(data.entity_id)) {
+        zone(data.entity_id).enabled = data.enabled;
+        recomputeEstimatedTotalSeconds();
+      }
       if (service === "set_pause_between_zones") {
         statusAttrs.pause_between_zones_seconds = data.seconds;
         recomputeEstimatedTotalSeconds();
