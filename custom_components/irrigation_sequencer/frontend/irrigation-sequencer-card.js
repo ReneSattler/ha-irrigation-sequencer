@@ -44,6 +44,7 @@ const TRANSLATIONS = {
     settingsCardTitle: "Irrigation settings",
     zonesLabel: (n, total) => (total != null && n !== total ? `${n} of ${total} zones` : `${n} zones`),
     zoneEnabled: "Zone enabled",
+    testZone: "Run this zone once to test it",
     pauseBetweenZones: "Pause between zones",
     nightStart: "Automatic start",
     addTime: "Add time",
@@ -109,6 +110,7 @@ const TRANSLATIONS = {
     settingsCardTitle: "Bewässerungseinstellungen",
     zonesLabel: (n, total) => (total != null && n !== total ? `${n} von ${total} Zonen` : `${n} Zonen`),
     zoneEnabled: "Zone aktiv",
+    testZone: "Diese Zone einmal zum Testen laufen lassen",
     pauseBetweenZones: "Pause zwischen Zonen",
     nightStart: "Automatischer Start",
     addTime: "Zeit hinzufügen",
@@ -1057,6 +1059,7 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
           <div style="display:flex; align-items:center; gap:8px;">
             <input type="range" min="1" max="30" value="${durationMinutes}" class="zone-duration" data-entity="${zone.entity_id}" />
             <span class="tile-row-value">${durationMinutes} min</span>
+            <button class="chip test-zone" data-entity="${zone.entity_id}" title="${t.testZone}" style="padding: 2px 10px;">▶</button>
           </div>
         </div>
       </div>
@@ -1317,6 +1320,12 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
           })
         );
       });
+    });
+
+    root.querySelectorAll(".test-zone").forEach((btn) => {
+      btn.addEventListener("click", () =>
+        this._callService("run_zone", { entity_id: btn.dataset.entity })
+      );
     });
 
     root.querySelectorAll(".zone-duration").forEach((input) => {

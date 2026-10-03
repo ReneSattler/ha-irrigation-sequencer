@@ -27,6 +27,7 @@ from .const import (
     DEFAULT_WEATHER_REFERENCE_TEMP,
     DEFAULT_WEATHER_TEMP_SOURCE,
     DEFAULT_ZONE_DURATION_MINUTES,
+    MAX_ZONE_DURATION_MINUTES,
     FORECAST_REFRESH_MINUTES,
     MAX_START_TIMES,
     MAX_UNEXPECTED_ACTIVATIONS_KEPT,
@@ -1219,6 +1220,121 @@ class IrrigationSequencerManager:
         self._stop_requested = True
         if self._run_task and not self._run_task.done():
             await self._run_task
+
+    async def async_run_zone(self, entity_id: str, minutes: int | None = None) -> None:
+        """Run a single zone once, for testing (e.g. a new sprinkler head).
+
+        Uses the zone's configured duration unless minutes is given - and,
+        unlike a full sequence, never applies the weather factor, so a test
+        runs exactly the time asked for. Recorded in last_run_zones like a
+        real zone (marked as a test run) but sends no completion
+        notification. Like a manual start it is explicit user intent: it
+        bypasses winter mode and rain pause, but never stacks onto a
+        sequence that already owns the valves."""
+        zone = next((z for z in self.zones if z["entity_id"] == entity_id), None)
+        if zone is None:
+            _LOGGER.warning("Unknown zone %s, ignoring test run request", entity_id)
+            return
+        if self._sequence_active:
+            _LOGGER.warning(
+                "Irrigation sequence is already running, ignoring test run request for %s",
+                entity_id,
+            )
+            return
+
+        target = zone["duration_minutes"] * 60 if minutes is None else int(minutes) * 60
+        target = max(60, min(MAX_ZONE_DURATION_MINUTES * 60, target))
+
+        # Fire and forget like async_start_now: the card's service promise
+        # resolves at once instead of hanging until the test finishes.
+        self._stop_requested = False
+        self._run_task = self.hass.async_create_task(
+            self._async_run_single_zone(entity_id, target)
+        )
+
+    async def _async_run_single_zone(self, entity_id: str, target: int) -> None:
+        # Same ownership contract as the full sequence: while this runs,
+        # the watchdog treats the valve as ours, and pause/stop work.
+        self._sequence_running = True
+        full_index = self._full_index_of(entity_id)
+        self.current_zone_index = full_index
+        self.last_zone_index = full_index
+        self.status = STATE_RUNNING
+        self.seconds_remaining_zone = target
+        self.seconds_remaining_total = target
+        self._notify_listeners()
+        _LOGGER.info("Zone %s test run starting: target=%ds", entity_id, target)
+
+        zone_elapsed = 0
+        expected_on_state = _on_state_for(entity_id)
+        external_off_at: int | None = None
+        try:
+            await self._async_set_valve(entity_id, True)
+            self._active_valve_entity_id = entity_id
+            while not self._stop_requested:
+                if zone_elapsed >= target:
+                    break
+                await asyncio.sleep(1)
+                if not await self._async_wait_while_paused():
+                    break
+                zone_elapsed += 1
+                if external_off_at is None:
+                    live_state = self.hass.states.get(entity_id)
+                    if live_state is not None and live_state.state != expected_on_state:
+                        external_off_at = zone_elapsed
+                        _LOGGER.warning(
+                            "Zone %s reports state '%s' after %ds even though this "
+                            "test run still expects it %s - the device may be "
+                            "turning itself off on its own.",
+                            entity_id,
+                            live_state.state,
+                            zone_elapsed,
+                            expected_on_state,
+                        )
+                self.seconds_remaining_zone = max(0, target - zone_elapsed)
+                self.seconds_remaining_total = self.seconds_remaining_zone
+                self._notify_listeners()
+            await self._async_set_valve(entity_id, False)
+            self._active_valve_entity_id = None
+            _LOGGER.info(
+                "Zone %s test run finished: elapsed=%ds target=%ds "
+                "external_off_detected_at=%s stopped_early=%s",
+                entity_id,
+                zone_elapsed,
+                target,
+                external_off_at,
+                self._stop_requested,
+            )
+            self.last_run_zones.append(
+                {
+                    "entity_id": entity_id,
+                    "duration_minutes": round(target / 60),
+                    "factor_at_start": 1.0,
+                    "target_seconds_at_start": target,
+                    "target_seconds_at_finish": target,
+                    "actual_elapsed_seconds": zone_elapsed,
+                    "external_off_detected_at_seconds": external_off_at,
+                    "stopped_early": self._stop_requested,
+                    "test_run": True,
+                }
+            )
+            await self._async_save()
+        finally:
+            for zone in self.zones:
+                await self._async_set_valve(zone["entity_id"], False)
+            self._sequence_running = False
+            self.status = STATE_IDLE
+            self.current_zone_index = None
+            self.last_zone_index = None
+            self.seconds_remaining_zone = 0
+            self.seconds_remaining_total = 0
+            self._stop_requested = False
+            self._paused = False
+            self._paused_phase = None
+            self._pause_valve_entity_id = None
+            self._active_valve_entity_id = None
+            self._pause_started_monotonic = None
+            self._notify_listeners()
 
     async def async_pause(self) -> None:
         """Freeze a running sequence in place.

@@ -251,6 +251,32 @@ stop:
       selector:
         text:
 
+run_zone:
+  name: Run single zone
+  description: >-
+    Runs one zone once for testing (e.g. a new sprinkler head). Uses the
+    zone's configured duration unless minutes is given; the weather factor
+    is never applied so a test runs exactly the requested time. Refused
+    while a sequence owns the valves.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: [valve, switch, light]
+    minutes:
+      required: false
+      description: Test duration; defaults to the zone's configured duration.
+      selector:
+        number:
+          min: 1
+          max: 30
+          unit_of_measurement: min
+
 pause:
   name: Pause sequence
   description: >-

@@ -50,6 +50,7 @@ from .const import (
     SERVICE_SET_NOTIFY_TARGET,
     SERVICE_SET_WEATHER_ADJUSTMENT,
     SERVICE_SET_WINTER_MODE,
+    SERVICE_RUN_ZONE,
     SERVICE_SET_ZONE_DURATION,
     SERVICE_SET_ZONE_ENABLED,
     SERVICE_SET_ZONE_NAME,
@@ -87,6 +88,15 @@ SET_ZONE_ENABLED_SCHEMA = vol.Schema(
         vol.Required("entry_id"): cv.string,
         vol.Required("entity_id"): cv.entity_id,
         vol.Required("enabled"): cv.boolean,
+    }
+)
+RUN_ZONE_SCHEMA = vol.Schema(
+    {
+        vol.Required("entry_id"): cv.string,
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Optional("minutes"): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=MAX_ZONE_DURATION_MINUTES)
+        ),
     }
 )
 SET_PAUSE_SCHEMA = vol.Schema(
@@ -372,6 +382,10 @@ def _async_register_services(hass: HomeAssistant) -> None:
         manager = _get_manager(hass, call.data["entry_id"])
         await manager.async_stop()
 
+    async def handle_run_zone(call: ServiceCall) -> None:
+        manager = _get_manager(hass, call.data["entry_id"])
+        await manager.async_run_zone(call.data["entity_id"], call.data.get("minutes"))
+
     async def handle_pause(call: ServiceCall) -> None:
         manager = _get_manager(hass, call.data["entry_id"])
         await manager.async_pause()
@@ -438,6 +452,9 @@ def _async_register_services(hass: HomeAssistant) -> None:
         DOMAIN, SERVICE_START_NOW, handle_start_now, schema=ENTRY_ID_ONLY_SCHEMA
     )
     hass.services.async_register(DOMAIN, SERVICE_STOP, handle_stop, schema=ENTRY_ID_ONLY_SCHEMA)
+    hass.services.async_register(
+        DOMAIN, SERVICE_RUN_ZONE, handle_run_zone, schema=RUN_ZONE_SCHEMA
+    )
     hass.services.async_register(
         DOMAIN, SERVICE_PAUSE, handle_pause, schema=ENTRY_ID_ONLY_SCHEMA
     )
