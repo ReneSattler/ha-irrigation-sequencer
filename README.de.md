@@ -43,6 +43,13 @@ im Browser ausprobieren kannst.*
   (z. B. neuer Sprinklerkopf) über den ▶-Button in ihrer
   Settings-Card-Zeile oder `irrigation_sequencer.run_zone` – immer exakt
   die gewünschte Zeit, ohne Wetter-Faktor
+- **Lauftage** – geplante Läufe auf ausgewählte Wochentage beschränken
+  (z. B. Mo/Mi/Fr) über die Wochentag-Chips in der Settings-Card oder
+  `irrigation_sequencer.set_run_weekdays` – manuelle Starts gehen immer
+- **Nächsten Lauf überspringen** – den kommenden geplanten Lauf einmal
+  aussetzen (Gärtnerbesuch, Party auf dem Rasen) über die Settings-Card,
+  die Skip-Button-Entität oder `irrigation_sequencer.skip_next_run` –
+  danach automatisch vergessen, zurücknehmen mit `clear_skip_next_run`
 - **Sequenz mit fester Reihenfolge** – jede Zone wird nacheinander bewässert,
   die Reihenfolge lässt sich in der Settings-Card per Drag & Drop ändern
 - **Individuelle Dauer pro Zone** – jede Zone hat ihre eigene Bewässerungsdauer (Minuten)
@@ -255,6 +262,9 @@ eigene Automationen:
 | `irrigation_sequencer.set_zone_duration` | Bewässerungsdauer einer Zone setzen |
 | `irrigation_sequencer.set_zone_enabled` | Zone in die Sequenz aufnehmen/ausschließen (ab dem nächsten Lauf) |
 | `irrigation_sequencer.run_zone` | Einzelne Zone einmal zum Testen laufen lassen (ohne Wetter-Faktor) |
+| `irrigation_sequencer.set_run_weekdays` | Geplante Läufe auf Wochentage beschränken (Mo=1..So=7) |
+| `irrigation_sequencer.skip_next_run` | Nächsten geplanten Lauf einmal überspringen |
+| `irrigation_sequencer.clear_skip_next_run` | Vorgemerktes Überspringen zurücknehmen |
 | `irrigation_sequencer.set_pause_between_zones` | Pause zwischen Zonen setzen |
 | `irrigation_sequencer.set_start_times` | Tägliche Startzeiten setzen (1–3) |
 | `irrigation_sequencer.set_rain_pause` | Regen-Pause für 1–24 Tage setzen |

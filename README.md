@@ -38,6 +38,13 @@ Home Assistant instance.*
   sprinkler head) via the ▶ button on its settings-card row or
   `irrigation_sequencer.run_zone` - always exactly the requested time,
   weather factor never applied
+- **Run weekdays** - restrict scheduled runs to selected weekdays (e.g.
+  Mon/Wed/Fri) via weekday chips in the settings card or
+  `irrigation_sequencer.set_run_weekdays` - manual starts always work
+- **Skip next run** - skip the upcoming scheduled run once (gardener visit,
+  party on the lawn) via the settings card, the skip button entity, or
+  `irrigation_sequencer.skip_next_run` - forgotten automatically after use,
+  undo with `clear_skip_next_run`
 - **Sequential order** - each zone is irrigated one after another; the order
   can be changed by drag & drop directly in the settings card
 - **Per-zone duration** - every zone has its own irrigation duration (minutes)
@@ -233,6 +240,9 @@ automations:
 | `irrigation_sequencer.set_zone_duration` | Set the irrigation duration of a zone |
 | `irrigation_sequencer.set_zone_enabled` | Include/exclude a zone from the sequence (from the next run) |
 | `irrigation_sequencer.run_zone` | Run a single zone once for testing (no weather factor) |
+| `irrigation_sequencer.set_run_weekdays` | Restrict scheduled runs to selected weekdays (Mon=1..Sun=7) |
+| `irrigation_sequencer.skip_next_run` | Skip the upcoming scheduled run once |
+| `irrigation_sequencer.clear_skip_next_run` | Take back a pending one-shot skip |
 | `irrigation_sequencer.set_pause_between_zones` | Set the pause between zones |
 | `irrigation_sequencer.set_start_times` | Set the daily start times (1-3) |
 | `irrigation_sequencer.set_rain_pause` | Pause irrigation for 1-24 days |

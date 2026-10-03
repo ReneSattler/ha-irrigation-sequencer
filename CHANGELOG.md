@@ -5,6 +5,26 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.8.0] - 2026-10-03
+
+- **Run weekdays** (fixes
+  [#71](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/71)):
+  scheduled runs can be restricted to selected weekdays (ISO Monday=1 ..
+  Sunday=7, every day by default). The daily triggers stay as they are
+  and filter at fire time; `next_run` jumps to the next enabled weekday
+  including week wraparound. New `irrigation_sequencer.set_run_weekdays`
+  service and weekday chips in the settings card (the last active day
+  cannot be switched off).
+- **Skip next run** (fixes
+  [#72](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/72)):
+  one-shot skip of the upcoming scheduled run, persisted so an evening
+  "skip tomorrow morning" survives a night restart. New
+  `irrigation_sequencer.skip_next_run` / `.clear_skip_next_run`
+  services, a skip button entity, skip/undo controls in the settings
+  card, and a "Next run skipped" status hint (with `next_run` already
+  pointing at the run after). Manual starts ignore the flag and leave it
+  armed; winter mode and rain pause keep it armed too.
+
 ## [1.7.0] - 2026-10-03
 
 - **Per-zone enable/disable** (fixes
