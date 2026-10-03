@@ -20,6 +20,7 @@ async def async_setup_entry(
             IrrigationSequencerWinterModeSwitch(manager, entry),
             IrrigationSequencerWeatherAdjustmentSwitch(manager, entry),
             IrrigationSequencerAutoOffUnexpectedSwitch(manager, entry),
+            IrrigationSequencerFrostProtectionSwitch(manager, entry),
         ]
     )
 
@@ -117,3 +118,28 @@ class IrrigationSequencerAutoOffUnexpectedSwitch(_BaseSwitch):
 
     async def async_turn_off(self, **kwargs) -> None:
         await self._manager.async_set_auto_off_unexpected(False)
+
+
+class IrrigationSequencerFrostProtectionSwitch(_BaseSwitch):
+    """Switch blocking scheduled runs near freezing - a milder, automatic
+    sibling of winter mode for cold spring/autumn nights."""
+
+    _attr_translation_key = "frost_protection"
+    _attr_icon = "mdi:snowflake-alert"
+
+    def __init__(self, manager: IrrigationSequencerManager, entry: ConfigEntry) -> None:
+        super().__init__(manager, entry, "frost_protection")
+
+    @property
+    def is_on(self) -> bool:
+        return self._manager.frost_protection_enabled
+
+    async def async_turn_on(self, **kwargs) -> None:
+        await self._manager.async_set_frost_protection(
+            True, self._manager.frost_threshold_temp
+        )
+
+    async def async_turn_off(self, **kwargs) -> None:
+        await self._manager.async_set_frost_protection(
+            False, self._manager.frost_threshold_temp
+        )

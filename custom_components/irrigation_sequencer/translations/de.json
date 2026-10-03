@@ -43,7 +43,8 @@
           "paused_between_zones": "Pause zwischen Zonen",
           "paused": "Pausiert",
           "winter_mode": "Wintermodus",
-          "rain_pause": "Regen-Pause"
+          "rain_pause": "Regen-Pause",
+          "frost": "Frostschutz"
         }
       }
     },
@@ -56,6 +57,9 @@
       },
       "auto_off_unexpected": {
         "name": "Zonen abschalten, die außerhalb eines Laufs angehen"
+      },
+      "frost_protection": {
+        "name": "Frostschutz"
       }
     },
     "button": {
@@ -100,6 +104,10 @@
     "set_run_weekdays": {
       "name": "Lauftage setzen",
       "description": "Beschränkt geplante Läufe auf ausgewählte Wochentage (ISO: Montag=1 .. Sonntag=7). Manuelle Starts gehen immer. Standard ist jeder Tag."
+    },
+    "set_frost_protection": {
+      "name": "Frostschutz setzen",
+      "description": "Blockiert geplante Läufe, solange die aktuelle Temperatur der Wetter-Entität auf oder unter dem Schwellwert liegt. Manuelle Starts gehen trotzdem. Blockiert nie ohne ablesbare Temperatur."
     },
     "skip_next_run": {
       "name": "Nächsten Lauf überspringen",

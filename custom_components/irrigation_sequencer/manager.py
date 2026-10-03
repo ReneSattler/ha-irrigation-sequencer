@@ -26,6 +26,8 @@ from .const import (
     DEFAULT_WEATHER_HOT_TEMP,
     DEFAULT_WEATHER_REFERENCE_TEMP,
     DEFAULT_RUN_WEEKDAYS,
+    DEFAULT_FROST_PROTECTION_ENABLED,
+    DEFAULT_FROST_THRESHOLD_TEMP,
     DEFAULT_WEATHER_TEMP_SOURCE,
     DEFAULT_ZONE_DURATION_MINUTES,
     MAX_ZONE_DURATION_MINUTES,
@@ -36,6 +38,7 @@ from .const import (
     MIN_START_TIMES,
     MIN_WEATHER_FACTOR,
     NOTIFY_MESSAGES_BY_LANGUAGE,
+    STATE_FROST,
     STATE_IDLE,
     STATE_PAUSED,
     STATE_PAUSED_BETWEEN_ZONES,
@@ -49,6 +52,8 @@ from .const import (
     AUTO_OFF_VERIFY_POLL_SECONDS,
     AUTO_OFF_VERIFY_SECONDS,
     MAX_AUTO_OFF_ATTEMPTS,
+    MAX_FROST_THRESHOLD_TEMP,
+    MIN_FROST_THRESHOLD_TEMP,
     UNEXPECTED_ACTIVATION_MESSAGES_BY_LANGUAGE,
     UNEXPECTED_ACTIVATION_REPORT_COOLDOWN_SECONDS,
     UNEXPECTED_SOURCE_AUTOMATION,
@@ -106,6 +111,8 @@ class IrrigationSequencerManager:
         # evening "skip tomorrow morning" survives a night restart; a
         # manual start ignores it and leaves it set.
         self.skip_next_run: bool = False
+        self.frost_protection_enabled: bool = DEFAULT_FROST_PROTECTION_ENABLED
+        self.frost_threshold_temp: float = DEFAULT_FROST_THRESHOLD_TEMP
         self.winter_mode: bool = False
         self.rain_pause_until: str | None = None
         # Notify service name (e.g. "mobile_app_my_phone", the part after
@@ -250,6 +257,17 @@ class IrrigationSequencerManager:
             if validated_weekdays is not None:
                 self.run_weekdays = validated_weekdays
             self.skip_next_run = bool(data.get("skip_next_run", False))
+            self.frost_protection_enabled = bool(
+                data.get(
+                    "frost_protection_enabled", DEFAULT_FROST_PROTECTION_ENABLED
+                )
+            )
+            try:
+                self.frost_threshold_temp = float(
+                    data.get("frost_threshold_temp", DEFAULT_FROST_THRESHOLD_TEMP)
+                )
+            except (TypeError, ValueError):
+                self.frost_threshold_temp = DEFAULT_FROST_THRESHOLD_TEMP
             self.winter_mode = data.get("winter_mode", False)
             self.rain_pause_until = data.get("rain_pause_until")
             self.notify_target = data.get("notify_target")
@@ -317,6 +335,8 @@ class IrrigationSequencerManager:
                 "start_times": self.start_times,
                 "run_weekdays": self.run_weekdays,
                 "skip_next_run": self.skip_next_run,
+                "frost_protection_enabled": self.frost_protection_enabled,
+                "frost_threshold_temp": self.frost_threshold_temp,
                 "winter_mode": self.winter_mode,
                 "rain_pause_until": self.rain_pause_until,
                 "notify_target": self.notify_target,
@@ -1208,6 +1228,33 @@ class IrrigationSequencerManager:
             return
         self.hass.async_create_task(self.async_start_now(triggered_by_schedule=True))
 
+    def _frost_blocking(self) -> tuple[bool, float | None]:
+        """Whether frost protection currently blocks a scheduled run, plus
+        the temperature it decided on. Never blocks without a readable
+        current temperature - a missing weather entity fails open, since a
+        sensor hiccup must not silently cancel watering."""
+        if not self.frost_protection_enabled:
+            return False, None
+        temp = self.weather_current_temp
+        if temp is None:
+            return False, None
+        return (temp <= self.frost_threshold_temp), temp
+
+    async def async_set_frost_protection(self, enabled: bool, threshold_temp: float) -> None:
+        self.frost_protection_enabled = bool(enabled)
+        try:
+            threshold = float(threshold_temp)
+        except (TypeError, ValueError):
+            threshold = self.frost_threshold_temp
+        if not (MIN_FROST_THRESHOLD_TEMP <= threshold <= MAX_FROST_THRESHOLD_TEMP):
+            raise ServiceValidationError(
+                f"frost threshold must be between {MIN_FROST_THRESHOLD_TEMP} and "
+                f"{MAX_FROST_THRESHOLD_TEMP} °C"
+            )
+        self.frost_threshold_temp = threshold
+        await self._async_save()
+        self._notify_listeners()
+
     def _is_blocked(self) -> tuple[bool, str | None]:
         if self.winter_mode:
             return True, STATE_WINTER_MODE
@@ -1220,6 +1267,9 @@ class IrrigationSequencerManager:
             # start attempt and status read anyway.
             self.rain_pause_until = None
             self.hass.async_create_task(self._async_save())
+        frost_blocking, _ = self._frost_blocking()
+        if frost_blocking:
+            return True, STATE_FROST
         return False, None
 
     @property
