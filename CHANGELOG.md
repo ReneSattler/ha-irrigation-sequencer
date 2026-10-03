@@ -5,6 +5,25 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.7.0] - 2026-10-03
+
+- **Per-zone enable/disable** (fixes
+  [#70](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/70)):
+  zones carry an `enabled` flag (on by default, migrated for existing
+  configs) - a disabled zone is never opened and contributes no time to
+  any estimate, total or countdown, including the start-time overlap
+  check. New `irrigation_sequencer.set_zone_enabled` service, one toggle
+  per zone row in the settings card ("n of m zones" hint), and the status
+  timeline shows enabled zones only. Membership is frozen at run start;
+  duration edits still apply live.
+- **Single-zone test run** (fixes
+  [#74](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/74)):
+  new `irrigation_sequencer.run_zone` service (zone + optional minutes)
+  and a ▶ test button on every settings-card zone row. Runs exactly the
+  requested time - the weather factor is never applied - recorded in
+  `last_run_zones` as a test run, with working pause/stop, refused while
+  a sequence owns the valves, and no completion notification.
+
 ## [1.6.1] - 2026-10-03
 
 - Fixed: the resume button used the same `mdi:play` icon as the start

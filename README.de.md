@@ -35,6 +35,14 @@ im Browser ausprobieren kannst.*
   für breite Dashboard-Spalten
 - **Eigene Zonen-Namen** – jedes Ventil/jede Steckdose kann einen eigenen
   Anzeigenamen bekommen, unabhängig vom Namen der zugrunde liegenden Entität
+- **Zonen aktivieren/deaktivieren** – eine Zone temporär aus der Sequenz
+  nehmen (z. B. ein Beet, das gerade kein Wasser braucht), ohne sie zu
+  entfernen – Schalter pro Zone in der Settings-Card oder
+  `irrigation_sequencer.set_zone_enabled`
+- **Einzelzonen-Testlauf** – eine Zone einmal zum Testen laufen lassen
+  (z. B. neuer Sprinklerkopf) über den ▶-Button in ihrer
+  Settings-Card-Zeile oder `irrigation_sequencer.run_zone` – immer exakt
+  die gewünschte Zeit, ohne Wetter-Faktor
 - **Sequenz mit fester Reihenfolge** – jede Zone wird nacheinander bewässert,
   die Reihenfolge lässt sich in der Settings-Card per Drag & Drop ändern
 - **Individuelle Dauer pro Zone** – jede Zone hat ihre eigene Bewässerungsdauer (Minuten)
@@ -221,13 +229,15 @@ Nur die *anfängliche* Zonen-Auswahl ist ein klassischer "Einrichtungsdialog"
   Optionen-Dialog, in dem du die 1–10 Ventil-/Steckdosen-Entitäten jederzeit
   neu auswählen kannst. Zonen, die ausgewählt bleiben, behalten ihren Namen,
   ihre Dauer und Position; neu hinzugefügte Zonen bekommen Standardwerte.
-- **Zonen-Namen, -Reihenfolge, -Dauer, Wintermodus, Regen-Pause, Nachtstart,
-  Pause zwischen Zonen, Wetter-Anpassung**: das sind keine
+- **Zonen-Namen, -Reihenfolge, -Dauer, -Schalter (aktiv/inaktiv), Wintermodus,
+  Regen-Pause, Nachtstart, Pause zwischen Zonen, Wetter-Anpassung**: das sind keine
   Dialog-Einstellungen, sondern Live-Werte, die du direkt über die
   Settings-Card änderst (empfohlen), über die bereitgestellten Entitäten
   `switch.*_winter_mode` / `switch.*_weather_adjustment`, oder über die
   Services unten (praktisch für eigene Automationen, z. B. "Wintermodus jedes
-  Jahr am 1. November aktivieren").
+  Jahr am 1. November aktivieren"). Der ▶-Button in einer
+  Settings-Card-Zonen-Zeile (oder `run_zone`) lässt nur diese Zone einmal
+  zum Testen laufen.
 
 ## Dienste (Services)
 
@@ -243,6 +253,8 @@ eigene Automationen:
 | `irrigation_sequencer.set_zone_order` | Reihenfolge der Zonen festlegen |
 | `irrigation_sequencer.set_zone_name` | Eigenen Anzeigenamen für eine Zone setzen |
 | `irrigation_sequencer.set_zone_duration` | Bewässerungsdauer einer Zone setzen |
+| `irrigation_sequencer.set_zone_enabled` | Zone in die Sequenz aufnehmen/ausschließen (ab dem nächsten Lauf) |
+| `irrigation_sequencer.run_zone` | Einzelne Zone einmal zum Testen laufen lassen (ohne Wetter-Faktor) |
 | `irrigation_sequencer.set_pause_between_zones` | Pause zwischen Zonen setzen |
 | `irrigation_sequencer.set_start_times` | Tägliche Startzeiten setzen (1–3) |
 | `irrigation_sequencer.set_rain_pause` | Regen-Pause für 1–24 Tage setzen |

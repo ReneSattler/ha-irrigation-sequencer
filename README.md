@@ -31,6 +31,13 @@ Home Assistant instance.*
   arrangement and a wide, short one for wide dashboard columns
 - **Custom zone names** - give each valve/plug its own display name,
   independent of the underlying entity name
+- **Enable/disable zones** - temporarily exclude a zone from the sequence
+  (e.g. a bed that needs no water right now) without removing it - per-zone
+  toggle in the settings card or `irrigation_sequencer.set_zone_enabled`
+- **Single-zone test run** - run one zone once to test it (e.g. a new
+  sprinkler head) via the ▶ button on its settings-card row or
+  `irrigation_sequencer.run_zone` - always exactly the requested time,
+  weather factor never applied
 - **Sequential order** - each zone is irrigated one after another; the order
   can be changed by drag & drop directly in the settings card
 - **Per-zone duration** - every zone has its own irrigation duration (minutes)
@@ -201,12 +208,14 @@ else is a live setting, not a one-time config step:
   can re-select the 1-10 valve/plug entities at any time. Zones that stay
   selected keep their configured name, duration and position; newly added
   zones get default values.
-- **Zone names, order, durations, winter mode, rain pause, night start, pause
+- **Zone names, order, durations, enabled toggles, winter mode, rain pause, night start, pause
   between zones, weather adjustment**: these are not part of a config dialog
   at all - they are live settings you change directly through the settings
   card (recommended), through the exposed `switch.*_winter_mode` /
   `switch.*_weather_adjustment` entities, or via the services below (handy
   for your own automations, e.g. "turn on winter mode every November 1st").
+  The ▶ button on a zone's settings-card row (or `run_zone`) runs just that
+  zone once for testing.
 
 ## Services
 
@@ -222,6 +231,8 @@ automations:
 | `irrigation_sequencer.set_zone_order` | Set the irrigation order of the zones |
 | `irrigation_sequencer.set_zone_name` | Set a custom display name for a zone |
 | `irrigation_sequencer.set_zone_duration` | Set the irrigation duration of a zone |
+| `irrigation_sequencer.set_zone_enabled` | Include/exclude a zone from the sequence (from the next run) |
+| `irrigation_sequencer.run_zone` | Run a single zone once for testing (no weather factor) |
 | `irrigation_sequencer.set_pause_between_zones` | Set the pause between zones |
 | `irrigation_sequencer.set_start_times` | Set the daily start times (1-3) |
 | `irrigation_sequencer.set_rain_pause` | Pause irrigation for 1-24 days |
