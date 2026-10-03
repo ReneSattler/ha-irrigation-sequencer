@@ -51,6 +51,27 @@ set_zone_name:
       selector:
         text:
 
+set_zone_enabled:
+  name: Set zone enabled
+  description: >-
+    Includes or excludes a zone from the sequence without removing it.
+    A disabled zone is never opened and contributes no time to any total;
+    the change applies from the next run (a running zone is not cut off).
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          domain: [valve, switch, light]
+    enabled:
+      required: true
+      selector:
+        boolean:
+
 set_pause_between_zones:
   name: Set pause between zones
   description: Sets the pause between two irrigation zones.
