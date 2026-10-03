@@ -1981,3 +1981,138 @@ async def test_skip_services_and_button_are_registered(
         DOMAIN, "clear_skip_next_run", {"entry_id": entry.entry_id}, blocking=True
     )
     assert manager.skip_next_run is False
+
+
+# --------------------------------------------------------------------- #
+# Frost protection
+# --------------------------------------------------------------------- #
+
+
+def _cold_manager(hass: HomeAssistant, temp: float | None) -> IrrigationSequencerManager:
+    """A manager with frost protection on and a weather entity carrying
+    the given current temperature (None = no temperature attribute)."""
+    manager = make_manager(hass, ["switch.zone_1"])
+    manager.weather_entity = "weather.home"
+    if temp is None:
+        hass.states.async_set("weather.home", "unknown", {})
+    else:
+        hass.states.async_set("weather.home", "cloudy", {"temperature": temp})
+    return manager
+
+
+async def test_frost_defaults_to_off(hass: HomeAssistant) -> None:
+    manager = make_manager(hass)
+    assert manager.frost_protection_enabled is False
+    assert manager.frost_threshold_temp == 2.0
+
+
+async def test_frost_blocks_scheduled_run_at_and_below_threshold(
+    hass: HomeAssistant,
+) -> None:
+    for temp in (2.0, 0.5, -5.0):
+        manager = _cold_manager(hass, temp)
+        await manager.async_set_frost_protection(True, 2.0)
+
+        calls = []
+
+        async def fake_set_valve(eid, on):
+            calls.append((eid, on))
+
+        manager._async_set_valve = fake_set_valve
+        await manager.async_start_now(triggered_by_schedule=True)
+
+        assert manager.status == "frost"
+        assert calls == []
+        assert manager.next_run is None
+
+
+async def test_frost_allows_run_above_threshold(hass: HomeAssistant) -> None:
+    manager = _cold_manager(hass, 2.5)
+    await manager.async_set_zone_duration("switch.zone_1", 1)
+    await manager.async_set_frost_protection(True, 2.0)
+
+    async def fake_set_valve(eid, on):
+        pass
+
+    manager._async_set_valve = fake_set_valve
+    with patch("asyncio.sleep", _instant_sleep):
+        await manager.async_start_now(triggered_by_schedule=True)
+        assert manager._run_task is not None
+        await asyncio.wait_for(manager._run_task, timeout=5)
+
+    assert manager.status == "idle"
+    assert len(manager.last_run_zones) == 1
+
+
+async def test_frost_never_blocks_without_temperature(
+    hass: HomeAssistant,
+) -> None:
+    """No weather entity, or one without a temperature reading, fails
+    open - a sensor hiccup must not silently cancel watering."""
+    for manager in (make_manager(hass), _cold_manager(hass, None)):
+        await manager.async_set_frost_protection(True, 2.0)
+        blocked, _ = manager._is_blocked()
+        assert blocked is False
+
+
+async def test_manual_start_bypasses_frost(hass: HomeAssistant) -> None:
+    manager = _cold_manager(hass, -3.0)
+    await manager.async_set_zone_duration("switch.zone_1", 1)
+    await manager.async_set_frost_protection(True, 2.0)
+
+    async def fake_set_valve(eid, on):
+        pass
+
+    manager._async_set_valve = fake_set_valve
+    with patch("asyncio.sleep", _instant_sleep):
+        await manager.async_start_now()
+        assert manager._run_task is not None
+        await asyncio.wait_for(manager._run_task, timeout=5)
+
+    assert len(manager.last_run_zones) == 1
+
+
+async def test_frost_threshold_validation_and_persistence(
+    hass: HomeAssistant,
+) -> None:
+    manager = make_manager(hass)
+    await manager.async_set_frost_protection(True, 0.0)
+    assert manager.frost_threshold_temp == 0.0
+
+    with pytest.raises(ServiceValidationError):
+        await manager.async_set_frost_protection(True, 25.0)
+    assert manager.frost_threshold_temp == 0.0
+
+    reloaded = make_manager(hass)
+    await reloaded.async_load()
+    assert reloaded.frost_protection_enabled is True
+    assert reloaded.frost_threshold_temp == 0.0
+
+
+async def test_frost_service_and_switch_are_registered(
+    hass: HomeAssistant,
+) -> None:
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.irrigation_sequencer.const import CONF_ZONE_ENTITIES, DOMAIN
+
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={CONF_ZONE_ENTITIES: ["switch.zone_1"]}
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.services.has_service(DOMAIN, "set_frost_protection")
+    switch_ids = [state.entity_id for state in hass.states.async_all("switch")]
+    assert any("frost" in entity_id for entity_id in switch_ids)
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_frost_protection",
+        {"entry_id": entry.entry_id, "enabled": True, "threshold_temp": 1.5},
+        blocking=True,
+    )
+    manager = hass.data[DOMAIN][entry.entry_id]
+    assert manager.frost_protection_enabled is True
+    assert manager.frost_threshold_temp == 1.5

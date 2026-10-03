@@ -43,7 +43,8 @@
           "paused_between_zones": "Pause between zones",
           "paused": "Paused",
           "winter_mode": "Winter mode",
-          "rain_pause": "Rain pause"
+          "rain_pause": "Rain pause",
+          "frost": "Frost protection"
         }
       }
     },
@@ -56,6 +57,9 @@
       },
       "auto_off_unexpected": {
         "name": "Turn off zones switched on outside a run"
+      },
+      "frost_protection": {
+        "name": "Frost protection"
       }
     },
     "button": {

@@ -52,6 +52,7 @@ from .const import (
     SERVICE_SET_WINTER_MODE,
     SERVICE_CLEAR_SKIP_NEXT_RUN,
     SERVICE_RUN_ZONE,
+    SERVICE_SET_FROST_PROTECTION,
     SERVICE_SET_RUN_WEEKDAYS,
     SERVICE_SKIP_NEXT_RUN,
     SERVICE_SET_ZONE_DURATION,
@@ -164,6 +165,13 @@ SET_NOTIFY_TARGET_SCHEMA = vol.Schema(
     }
 )
 ENTRY_ID_ONLY_SCHEMA = vol.Schema({vol.Required("entry_id"): cv.string})
+SET_FROST_PROTECTION_SCHEMA = vol.Schema(
+    {
+        vol.Required("entry_id"): cv.string,
+        vol.Required("enabled"): cv.boolean,
+        vol.Optional("threshold_temp"): vol.Coerce(float),
+    }
+)
 
 FRONTEND_URL_BASE = f"/{DOMAIN}_files"
 CARD_FILENAME = "irrigation-sequencer-card.js"
@@ -368,6 +376,13 @@ def _async_register_services(hass: HomeAssistant) -> None:
         manager = _get_manager(hass, call.data["entry_id"])
         await manager.async_clear_skip_next_run()
 
+    async def handle_set_frost_protection(call: ServiceCall) -> None:
+        manager = _get_manager(hass, call.data["entry_id"])
+        await manager.async_set_frost_protection(
+            call.data["enabled"],
+            call.data.get("threshold_temp", manager.frost_threshold_temp),
+        )
+
     async def handle_set_rain_pause(call: ServiceCall) -> None:
         manager = _get_manager(hass, call.data["entry_id"])
         await manager.async_set_rain_pause(call.data["days"])
@@ -457,6 +472,12 @@ def _async_register_services(hass: HomeAssistant) -> None:
         SERVICE_CLEAR_SKIP_NEXT_RUN,
         handle_clear_skip_next_run,
         schema=ENTRY_ID_ONLY_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_FROST_PROTECTION,
+        handle_set_frost_protection,
+        schema=SET_FROST_PROTECTION_SCHEMA,
     )
     hass.services.async_register(
         DOMAIN, SERVICE_SET_RAIN_PAUSE, handle_set_rain_pause, schema=SET_RAIN_PAUSE_SCHEMA

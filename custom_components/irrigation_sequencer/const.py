@@ -40,6 +40,13 @@ DEFAULT_AUTO_OFF_UNEXPECTED = True
 MIN_RAIN_PAUSE_DAYS = 1
 MAX_RAIN_PAUSE_DAYS = 24
 
+# Frost protection: block scheduled runs while the current outside
+# temperature is at or below this threshold. Disabled by default.
+DEFAULT_FROST_PROTECTION_ENABLED = False
+DEFAULT_FROST_THRESHOLD_TEMP = 2.0
+MIN_FROST_THRESHOLD_TEMP = -10.0
+MAX_FROST_THRESHOLD_TEMP = 10.0
+
 # Weather-based duration adjustment: linear interpolation between
 # (reference_temp -> factor 1.0) and (hot_temp -> hot_factor), extrapolated
 # beyond those points and clamped to a sane range.
@@ -73,6 +80,7 @@ FORECAST_REFRESH_MINUTES = 30
 STORAGE_VERSION = 1
 STORAGE_KEY_PREFIX = f"{DOMAIN}_state"
 
+STATE_FROST = "frost"
 STATE_IDLE = "idle"
 STATE_RUNNING = "running"
 STATE_PAUSED_BETWEEN_ZONES = "paused_between_zones"
@@ -83,6 +91,7 @@ STATE_WINTER_MODE = "winter_mode"
 STATE_RAIN_PAUSE = "rain_pause"
 
 SERVICE_SET_RUN_WEEKDAYS = "set_run_weekdays"
+SERVICE_SET_FROST_PROTECTION = "set_frost_protection"
 SERVICE_SKIP_NEXT_RUN = "skip_next_run"
 SERVICE_CLEAR_SKIP_NEXT_RUN = "clear_skip_next_run"
 SERVICE_SET_ZONE_ORDER = "set_zone_order"
@@ -108,6 +117,8 @@ ATTR_PAUSE_BETWEEN_ZONES_SECONDS = "pause_between_zones_seconds"
 ATTR_START_TIMES = "start_times"
 ATTR_RUN_WEEKDAYS = "run_weekdays"
 ATTR_SKIP_NEXT_RUN = "skip_next_run"
+ATTR_FROST_PROTECTION_ENABLED = "frost_protection_enabled"
+ATTR_FROST_THRESHOLD_TEMP = "frost_threshold_temp"
 ATTR_WINTER_MODE = "winter_mode"
 ATTR_RAIN_PAUSE_UNTIL = "rain_pause_until"
 ATTR_CURRENT_ZONE_INDEX = "current_zone_index"

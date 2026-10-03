@@ -39,6 +39,7 @@ const TRANSLATIONS = {
       paused: "Paused",
       winter_mode: "Winter mode active",
       rain_pause: "Rain pause active",
+      frost: "Frost protection active",
     },
     statusCardTitle: "Irrigation",
     settingsCardTitle: "Irrigation settings",
@@ -51,6 +52,7 @@ const TRANSLATIONS = {
     startTimesOverlap: (a, b, minutes) =>
       `${a} and ${b} are too close together (a full run currently takes about ${minutes} min) - they would overlap. Not saved.`,
     winterMode: "Winter mode",
+    frostProtection: "Frost protection",
     autoOffUnexpected: "Auto-off outside a run",
     rainPause: "Rain pause",
     rainPauseClear: (until) => `until ${until} · clear`,
@@ -110,6 +112,7 @@ const TRANSLATIONS = {
       paused: "Pausiert",
       winter_mode: "Wintermodus aktiv",
       rain_pause: "Regen-Pause aktiv",
+      frost: "Frostschutz aktiv",
     },
     statusCardTitle: "Bewässerung",
     settingsCardTitle: "Bewässerungseinstellungen",
@@ -122,6 +125,7 @@ const TRANSLATIONS = {
     startTimesOverlap: (a, b, minutes) =>
       `${a} und ${b} liegen zu nah beieinander (ein Durchlauf dauert aktuell ca. ${minutes} min) - sie würden sich überschneiden. Nicht gespeichert.`,
     winterMode: "Wintermodus",
+    frostProtection: "Frostschutz",
     autoOffUnexpected: "Auto-Aus außerhalb Lauf",
     rainPause: "Regen-Pause",
     rainPauseClear: (until) => `bis ${until} · aufheben`,
@@ -201,6 +205,7 @@ const STATUS_COLORS = {
   paused: "var(--warning-color, #ff9800)",
   winter_mode: "var(--info-color, #03a9f4)",
   rain_pause: "var(--info-color, #03a9f4)",
+  frost: "var(--info-color, #03a9f4)",
 };
 
 function formatSeconds(totalSeconds) {
@@ -991,6 +996,17 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
               </label>
             </div>
           </div>
+          <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4)">
+            <div class="tile-row-icon"><ha-icon icon="mdi:snowflake"></ha-icon></div>
+            <div class="tile-row-label">${t.frostProtection}</div>
+            <div class="tile-row-control" style="gap: 8px;">
+              <input type="number" id="frost-threshold" value="${attrs.frost_threshold_temp ?? 2}" step="0.5" min="-10" max="10" style="width: 64px;" />
+              <label class="switch">
+                <input type="checkbox" id="frost-toggle" ${attrs.frost_protection_enabled ? "checked" : ""} />
+                <span class="slider-toggle"></span>
+              </label>
+            </div>
+          </div>
           <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4); align-items: flex-start;">
             <div class="tile-row-icon"><ha-icon icon="mdi:weather-rainy"></ha-icon></div>
             <div class="tile-row-label">${t.rainPause}</div>
@@ -1265,6 +1281,21 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
 
     root.getElementById("winter-toggle")?.addEventListener("change", (e) => {
       this._releaseRenderSuppression(this._callService("set_winter_mode", { enabled: e.target.checked }));
+    });
+
+    const readFrostForm = (overrides = {}) => ({
+      enabled: overrides.enabled ?? root.getElementById("frost-toggle")?.checked ?? false,
+      threshold_temp:
+        overrides.threshold_temp ??
+        parseFloat(root.getElementById("frost-threshold")?.value ?? "2"),
+    });
+    root.getElementById("frost-toggle")?.addEventListener("change", (e) => {
+      this._releaseRenderSuppression(this._callService("set_frost_protection", readFrostForm({ enabled: e.target.checked })));
+    });
+    root.getElementById("frost-threshold")?.addEventListener("change", (e) => {
+      this._releaseRenderSuppression(
+        this._callService("set_frost_protection", readFrostForm({ threshold_temp: parseFloat(e.target.value) }))
+      );
     });
 
     root.getElementById("auto-off-unexpected-toggle")?.addEventListener("change", (e) => {
