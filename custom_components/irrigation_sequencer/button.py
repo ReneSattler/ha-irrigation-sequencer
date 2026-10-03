@@ -20,6 +20,7 @@ async def async_setup_entry(
             IrrigationSequencerStopButton(manager, entry),
             IrrigationSequencerPauseButton(manager, entry),
             IrrigationSequencerResumeButton(manager, entry),
+            IrrigationSequencerSkipNextButton(manager, entry),
         ]
     )
 
@@ -82,3 +83,14 @@ class IrrigationSequencerResumeButton(_BaseButton):
 
     async def async_press(self) -> None:
         await self._manager.async_resume()
+
+
+class IrrigationSequencerSkipNextButton(_BaseButton):
+    _attr_translation_key = "skip_next_run"
+    _attr_icon = "mdi:skip-next"
+
+    def __init__(self, manager: IrrigationSequencerManager, entry: ConfigEntry) -> None:
+        super().__init__(manager, entry, "skip_next_run")
+
+    async def async_press(self) -> None:
+        await self._manager.async_skip_next_run()

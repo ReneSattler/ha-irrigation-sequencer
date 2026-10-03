@@ -73,6 +73,9 @@ const TRANSLATIONS = {
     resume: "Resume",
     runDays: "Run days",
     weekdayNames: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    skipNextRun: "Skip next run",
+    skipNextRunUndo: "Next run skipped · undo",
+    nextRunSkipped: "Next run skipped",
     nextRun: "Next run",
     totalDuration: "Total duration",
     totalRemaining: "Total remaining",
@@ -141,6 +144,9 @@ const TRANSLATIONS = {
     resume: "Fortsetzen",
     runDays: "Lauftage",
     weekdayNames: ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"],
+    skipNextRun: "Nächsten Lauf überspringen",
+    skipNextRunUndo: "Nächster Lauf übersprungen · zurücknehmen",
+    nextRunSkipped: "Nächster Lauf übersprungen",
     nextRun: "Nächster Lauf",
     totalDuration: "Gesamtdauer",
     totalRemaining: "Gesamt verbleibend",
@@ -864,7 +870,7 @@ class IrrigationSequencerStatusCard extends IrrigationSequencerBaseCard {
           <div class="tile-icon ${isRunning ? "spraying" : ""}"><ha-icon icon="mdi:sprinkler-variant"></ha-icon></div>
           <div class="tile-text">
             <div class="tile-primary">${title}</div>
-            <div class="tile-secondary">${t.status[status] || status}</div>
+            <div class="tile-secondary">${status === "idle" && attrs.skip_next_run ? t.nextRunSkipped : (t.status[status] || status)}</div>
           </div>
           <div class="tile-actions">
             <button class="tile-icon-btn" id="pause-btn" ${canPause ? "" : "disabled"} title="${t.pause}">
@@ -968,6 +974,11 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
             <div class="tile-row-control" style="flex-direction: column; align-items: stretch; gap: 8px;">
               ${this._renderStartTimes(attrs)}
               ${this._renderWeekdays(attrs, t)}
+              ${
+                attrs.skip_next_run
+                  ? `<div class="chip-row" style="margin-top:0;"><button class="chip chip-clear" id="clear-skip-next">${t.skipNextRunUndo}</button></div>`
+                  : `<div class="chip-row" style="margin-top:0;"><button class="chip" id="skip-next-run">+ ${t.skipNextRun}</button></div>`
+              }
             </div>
           </div>
           <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4)">
@@ -1296,6 +1307,12 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
       const times = readRowTimes();
       times.push("12:00:00");
       submitStartTimes(times);
+    });
+    root.getElementById("skip-next-run")?.addEventListener("click", () => {
+      this._releaseRenderSuppression(this._callService("skip_next_run", {}));
+    });
+    root.getElementById("clear-skip-next")?.addEventListener("click", () => {
+      this._releaseRenderSuppression(this._callService("clear_skip_next_run", {}));
     });
     root.querySelectorAll("[data-weekday]").forEach((btn) => {
       btn.addEventListener("click", () => {

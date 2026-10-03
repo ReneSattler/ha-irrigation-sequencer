@@ -1819,3 +1819,165 @@ async def test_set_run_weekdays_service_is_registered(
     )
     manager = hass.data[DOMAIN][entry.entry_id]
     assert manager.run_weekdays == [1, 5]
+
+
+# --------------------------------------------------------------------- #
+# Skip-next-run (one-shot)
+# --------------------------------------------------------------------- #
+
+
+async def test_scheduled_start_consumes_skip_exactly_once(
+    hass: HomeAssistant,
+) -> None:
+    """The flag survives until the schedule fires, eats that one run, and
+    is gone afterwards - the following run happens normally."""
+    manager = make_manager(hass, ["switch.zone_1"])
+    await manager.async_set_zone_duration("switch.zone_1", 1)
+
+    calls = []
+
+    async def fake_set_valve(eid, on):
+        calls.append((eid, on))
+
+    manager._async_set_valve = fake_set_valve
+
+    await manager.async_skip_next_run()
+    assert manager.skip_next_run is True
+
+    with patch("asyncio.sleep", _instant_sleep):
+        await manager.async_start_now(triggered_by_schedule=True)
+        assert manager.skip_next_run is False
+        assert calls == []
+        assert manager.last_run_zones == []
+
+        # The next scheduled trigger runs as usual.
+        await manager.async_start_now(triggered_by_schedule=True)
+        if manager._run_task is not None:
+            await asyncio.wait_for(manager._run_task, timeout=5)
+
+    assert len(manager.last_run_zones) == 1
+
+
+async def test_manual_start_ignores_and_keeps_skip(
+    hass: HomeAssistant,
+) -> None:
+    """An explicit manual start is user intent: it runs and leaves the
+    armed skip alone for the schedule."""
+    manager = make_manager(hass, ["switch.zone_1"])
+    await manager.async_set_zone_duration("switch.zone_1", 1)
+
+    async def fake_set_valve(eid, on):
+        pass
+
+    manager._async_set_valve = fake_set_valve
+
+    await manager.async_skip_next_run()
+    with patch("asyncio.sleep", _instant_sleep):
+        await manager.async_start_now()
+        assert manager._run_task is not None
+        await asyncio.wait_for(manager._run_task, timeout=5)
+
+    assert manager.skip_next_run is True
+    assert len(manager.last_run_zones) == 1
+
+
+async def test_skip_survives_winter_mode_block(
+    hass: HomeAssistant,
+) -> None:
+    """Winter mode (or rain pause) already prevents the run, so the flag
+    must not be wasted on it."""
+    manager = make_manager(hass, ["switch.zone_1"])
+    await manager.async_set_winter_mode(True)
+    await manager.async_skip_next_run()
+
+    await manager.async_start_now(triggered_by_schedule=True)
+
+    assert manager.status == "winter_mode"
+    assert manager.skip_next_run is True
+
+
+async def test_skip_refused_while_running(hass: HomeAssistant) -> None:
+    manager = make_manager(hass, ["switch.zone_1"])
+    await manager.async_set_zone_duration("switch.zone_1", 2)
+
+    async def fake_set_valve(eid, on):
+        pass
+
+    manager._async_set_valve = fake_set_valve
+
+    with patch("asyncio.sleep", _instant_sleep):
+        run = asyncio.create_task(manager._async_run_sequence())
+        for _ in range(5000):
+            if manager.status == "running":
+                break
+            await _real_sleep(0)
+        await manager.async_skip_next_run()
+        assert manager.skip_next_run is False
+
+        manager._run_task = run
+        await manager.async_stop()
+        await asyncio.wait_for(run, timeout=5)
+
+    await manager.async_skip_next_run()
+    assert manager.skip_next_run is True
+
+
+async def test_skip_persists_across_reload(hass: HomeAssistant) -> None:
+    """Skipping tomorrow morning is usually armed the evening before -
+    a night restart must not disarm it."""
+    manager = make_manager(hass, ["switch.zone_1"])
+    await manager.async_skip_next_run()
+
+    reloaded = make_manager(hass, ["switch.zone_1"])
+    await reloaded.async_load()
+    assert reloaded.skip_next_run is True
+
+    await reloaded.async_clear_skip_next_run()
+    assert reloaded.skip_next_run is False
+
+
+async def test_next_run_jumps_over_skipped_hit(hass: HomeAssistant) -> None:
+    """With the flag armed, the display already points at the run after
+    the skipped one."""
+    from datetime import datetime, timezone
+
+    from homeassistant.util import dt as dt_util
+
+    manager = make_manager(hass)
+    await manager.async_set_start_times(["05:00:00"])
+
+    monday_noon = datetime(2026, 10, 5, 12, 0, tzinfo=timezone.utc)
+    with patch.object(dt_util, "now", return_value=monday_noon):
+        assert manager.next_run == "2026-10-06T05:00:00+00:00"
+        await manager.async_skip_next_run()
+        assert manager.next_run == "2026-10-07T05:00:00+00:00"
+
+
+async def test_skip_services_and_button_are_registered(
+    hass: HomeAssistant,
+) -> None:
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.irrigation_sequencer.const import CONF_ZONE_ENTITIES, DOMAIN
+
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={CONF_ZONE_ENTITIES: ["switch.zone_1"]}
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.services.has_service(DOMAIN, "skip_next_run")
+    assert hass.services.has_service(DOMAIN, "clear_skip_next_run")
+    button_ids = [state.entity_id for state in hass.states.async_all("button")]
+    assert any("skip" in entity_id for entity_id in button_ids)
+
+    await hass.services.async_call(
+        DOMAIN, "skip_next_run", {"entry_id": entry.entry_id}, blocking=True
+    )
+    manager = hass.data[DOMAIN][entry.entry_id]
+    assert manager.skip_next_run is True
+    await hass.services.async_call(
+        DOMAIN, "clear_skip_next_run", {"entry_id": entry.entry_id}, blocking=True
+    )
+    assert manager.skip_next_run is False
