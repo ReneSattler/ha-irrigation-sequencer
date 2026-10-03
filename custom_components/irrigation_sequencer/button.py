@@ -73,7 +73,9 @@ class IrrigationSequencerPauseButton(_BaseButton):
 
 class IrrigationSequencerResumeButton(_BaseButton):
     _attr_translation_key = "resume"
-    _attr_icon = "mdi:play"
+    # Deliberately not mdi:play: next to the start button the two would
+    # look like a duplicated start. play-pause reads as "continue".
+    _attr_icon = "mdi:play-pause"
 
     def __init__(self, manager: IrrigationSequencerManager, entry: ConfigEntry) -> None:
         super().__init__(manager, entry, "resume")
