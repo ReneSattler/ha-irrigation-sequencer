@@ -1501,3 +1501,175 @@ async def test_set_zone_enabled_service_is_registered(
     )
     manager = hass.data[DOMAIN][entry.entry_id]
     assert manager.zones[0]["enabled"] is False
+
+
+# --------------------------------------------------------------------- #
+# Single-zone test run
+# --------------------------------------------------------------------- #
+
+
+async def test_run_zone_waters_only_the_requested_zone(
+    hass: HomeAssistant,
+) -> None:
+    """A test run opens exactly one valve and records itself as a test -
+    without touching the other zones."""
+    manager = make_manager(hass, ["switch.zone_1", "switch.zone_2"])
+    await manager.async_set_zone_duration("switch.zone_1", 5)
+    await manager.async_set_zone_duration("switch.zone_2", 5)
+
+    calls = []
+
+    async def fake_set_valve(eid, on):
+        calls.append((eid, on))
+
+    manager._async_set_valve = fake_set_valve
+
+    with patch("asyncio.sleep", _instant_sleep):
+        await manager.async_run_zone("switch.zone_2", minutes=1)
+        assert manager._run_task is not None
+        await asyncio.wait_for(manager._run_task, timeout=5)
+
+    assert manager.status == "idle"
+    assert ("switch.zone_2", True) in calls
+    assert not any(eid == "switch.zone_1" and on for eid, on in calls)
+    assert len(manager.last_run_zones) == 1
+    record = manager.last_run_zones[0]
+    assert record["entity_id"] == "switch.zone_2"
+    assert record["actual_elapsed_seconds"] == 60
+    assert record["test_run"] is True
+
+
+async def test_run_zone_ignores_the_weather_factor(
+    hass: HomeAssistant,
+) -> None:
+    """A test must be predictable: even at a factor of 2.0 it runs the
+    plain configured minutes, not the scaled ones."""
+    manager = make_manager(hass, ["switch.zone_1"])
+    await manager.async_set_zone_duration("switch.zone_1", 1)
+    manager.weather_adjustment_enabled = True
+    manager.weather_reference_temp = 20.0
+    manager.weather_hot_temp = 30.0
+    manager.weather_hot_factor = 2.0
+    manager.weather_forecast_high = 30.0
+    assert manager.weather_current_factor == 2.0
+
+    async def fake_set_valve(eid, on):
+        pass
+
+    manager._async_set_valve = fake_set_valve
+
+    with patch("asyncio.sleep", _instant_sleep):
+        await manager.async_run_zone("switch.zone_1")
+        await asyncio.wait_for(manager._run_task, timeout=5)
+
+    assert manager.last_run_zones[0]["actual_elapsed_seconds"] == 60
+    assert manager.last_run_zones[0]["factor_at_start"] == 1.0
+
+
+async def test_run_zone_defaults_to_the_configured_duration(
+    hass: HomeAssistant,
+) -> None:
+    manager = make_manager(hass, ["switch.zone_1"])
+    await manager.async_set_zone_duration("switch.zone_1", 3)
+
+    async def fake_set_valve(eid, on):
+        pass
+
+    manager._async_set_valve = fake_set_valve
+
+    with patch("asyncio.sleep", _instant_sleep):
+        await manager.async_run_zone("switch.zone_1")
+        await asyncio.wait_for(manager._run_task, timeout=5)
+
+    assert manager.last_run_zones[0]["target_seconds_at_start"] == 180
+    assert manager.last_run_zones[0]["actual_elapsed_seconds"] == 180
+
+
+async def test_run_zone_unknown_entity_is_noop(hass: HomeAssistant) -> None:
+    manager = make_manager(hass, ["switch.zone_1"])
+
+    calls = []
+
+    async def fake_set_valve(eid, on):
+        calls.append((eid, on))
+
+    manager._async_set_valve = fake_set_valve
+
+    await manager.async_run_zone("switch.does_not_exist", minutes=1)
+
+    assert manager.status == "idle"
+    assert manager._run_task is None
+    assert calls == []
+
+
+async def test_run_zone_refused_while_sequence_active(
+    hass: HomeAssistant,
+) -> None:
+    """A test run never stacks onto a sequence that owns the valves -
+    in either direction."""
+    manager = make_manager(hass, ["switch.zone_1", "switch.zone_2"])
+    await manager.async_set_zone_duration("switch.zone_1", 2)
+    await manager.async_set_zone_duration("switch.zone_2", 2)
+
+    calls = []
+
+    async def fake_set_valve(eid, on):
+        calls.append((eid, on))
+
+    manager._async_set_valve = fake_set_valve
+
+    with patch("asyncio.sleep", _instant_sleep):
+        run = asyncio.create_task(manager._async_run_sequence())
+        for _ in range(5000):
+            if manager.status == "running":
+                break
+            await _real_sleep(0)
+
+        first_task = manager._run_task
+        await manager.async_run_zone("switch.zone_2", minutes=1)
+        # Rejected: no new task, zone 2 never opened on top.
+        assert ("switch.zone_2", True) not in calls
+
+        manager._run_task = run
+        await manager.async_stop()
+        await asyncio.wait_for(run, timeout=5)
+
+    assert manager.status == "idle"
+
+
+async def test_stop_aborts_a_test_run(hass: HomeAssistant) -> None:
+    manager = make_manager(hass, ["switch.zone_1"])
+
+    async def fake_set_valve(eid, on):
+        pass
+
+    manager._async_set_valve = fake_set_valve
+
+    with patch("asyncio.sleep", _instant_sleep):
+        await manager.async_run_zone("switch.zone_1", minutes=2)
+        for _ in range(5000):
+            if manager.status == "running" and manager.seconds_remaining_zone < 120:
+                break
+            await _real_sleep(0)
+        await manager.async_stop()
+        await asyncio.wait_for(manager._run_task, timeout=5)
+
+    assert manager.status == "idle"
+    assert manager.last_run_zones[0]["stopped_early"] is True
+    assert manager.last_run_zones[0]["test_run"] is True
+
+
+async def test_run_zone_service_is_registered(hass: HomeAssistant) -> None:
+    """The per-zone test button in the settings card calls run_zone."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.irrigation_sequencer.const import CONF_ZONE_ENTITIES, DOMAIN
+
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={CONF_ZONE_ENTITIES: ["switch.zone_1"]}
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.services.has_service(DOMAIN, "run_zone")
