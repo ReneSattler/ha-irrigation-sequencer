@@ -50,6 +50,15 @@ im Browser ausprobieren kannst.*
   aussetzen (Gärtnerbesuch, Party auf dem Rasen) über die Settings-Card,
   die Skip-Button-Entität oder `irrigation_sequencer.skip_next_run` –
   danach automatisch vergessen, zurücknehmen mit `clear_skip_next_run`
+- **Frostschutz** – geplante Läufe optional blockieren, solange die
+  aktuelle Außentemperatur auf oder unter einem Schwellwert liegt
+  (Standard 2 °C) – der mildere, automatische Bruder des Wintermodus für
+  kalte Frühlings-/Herbstnächte. Blockiert nie ohne ablesbare Temperatur;
+  manuelle Starts gehen trotzdem.
+- **Lauf-Verlauf** – jeder beendete Lauf (fertig, abgebrochen, Test) wird
+  mit Startzeit, Auslöser, Wassersekunden und Wetterfaktor gespeichert –
+  die Status-Card zeigt die letzten Läufe, der volle Verlauf (30 Einträge)
+  steht im Sensor-Attribut für Templates und Automationen
 - **Sequenz mit fester Reihenfolge** – jede Zone wird nacheinander bewässert,
   die Reihenfolge lässt sich in der Settings-Card per Drag & Drop ändern
 - **Individuelle Dauer pro Zone** – jede Zone hat ihre eigene Bewässerungsdauer (Minuten)
@@ -265,6 +274,7 @@ eigene Automationen:
 | `irrigation_sequencer.set_run_weekdays` | Geplante Läufe auf Wochentage beschränken (Mo=1..So=7) |
 | `irrigation_sequencer.skip_next_run` | Nächsten geplanten Lauf einmal überspringen |
 | `irrigation_sequencer.clear_skip_next_run` | Vorgemerktes Überspringen zurücknehmen |
+| `irrigation_sequencer.set_frost_protection` | Geplante Läufe ab/unter Temperatur-Schwellwert blockieren |
 | `irrigation_sequencer.set_pause_between_zones` | Pause zwischen Zonen setzen |
 | `irrigation_sequencer.set_start_times` | Tägliche Startzeiten setzen (1–3) |
 | `irrigation_sequencer.set_rain_pause` | Regen-Pause für 1–24 Tage setzen |

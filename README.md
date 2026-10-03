@@ -45,6 +45,14 @@ Home Assistant instance.*
   party on the lawn) via the settings card, the skip button entity, or
   `irrigation_sequencer.skip_next_run` - forgotten automatically after use,
   undo with `clear_skip_next_run`
+- **Frost protection** - optionally block scheduled runs while the current
+  outside temperature sits at or below a threshold (default 2 °C) - a
+  milder, automatic sibling of winter mode for cold spring/autumn nights.
+  Never blocks without a readable temperature; manual starts still work.
+- **Run history** - every finished run (completed, stopped, test) is
+  recorded with start time, trigger, watered seconds and weather factor -
+  the status card shows the recent runs, the full history (30 entries)
+  lives in the sensor attribute for templates and automations
 - **Sequential order** - each zone is irrigated one after another; the order
   can be changed by drag & drop directly in the settings card
 - **Per-zone duration** - every zone has its own irrigation duration (minutes)
@@ -243,6 +251,7 @@ automations:
 | `irrigation_sequencer.set_run_weekdays` | Restrict scheduled runs to selected weekdays (Mon=1..Sun=7) |
 | `irrigation_sequencer.skip_next_run` | Skip the upcoming scheduled run once |
 | `irrigation_sequencer.clear_skip_next_run` | Take back a pending one-shot skip |
+| `irrigation_sequencer.set_frost_protection` | Block scheduled runs at/below a temperature threshold |
 | `irrigation_sequencer.set_pause_between_zones` | Set the pause between zones |
 | `irrigation_sequencer.set_start_times` | Set the daily start times (1-3) |
 | `irrigation_sequencer.set_rain_pause` | Pause irrigation for 1-24 days |

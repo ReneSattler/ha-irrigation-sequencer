@@ -5,6 +5,27 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.9.0] - 2026-10-03
+
+- **Frost protection** (fixes
+  [#76](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/76)):
+  optionally block scheduled runs while the weather entity's *current*
+  temperature sits at or below a threshold (default 2 °C, -10..10 °C
+  range) - a milder, automatic sibling of winter mode for cold
+  spring/autumn nights. Distinct `frost` status, `next_run` stays empty
+  while blocking, manual starts still work, and a missing/unavailable
+  temperature never blocks (fail open). New
+  `irrigation_sequencer.set_frost_protection` service, a frost switch
+  entity, and a settings-card switch plus threshold input.
+- **Run history** (fixes
+  [#77](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/77)):
+  one persisted, capped (30 entries) record per finished run -
+  `started_at`, trigger (`schedule`/`manual`/`test`), zone count,
+  watered seconds, weather factor, `stopped_early`. Stopped and test
+  runs are kept too. New `run_history` sensor attribute plus a compact
+  recent-runs list on the status card; `last_run_zones` (per-zone detail
+  of the latest run) is unchanged.
+
 ## [1.8.0] - 2026-10-03
 
 - **Run weekdays** (fixes
