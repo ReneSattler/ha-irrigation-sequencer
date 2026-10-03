@@ -48,7 +48,10 @@ Home Assistant instance.*
 - **Frost protection** - optionally block scheduled runs while the current
   outside temperature sits at or below a threshold (default 2 °C) - a
   milder, automatic sibling of winter mode for cold spring/autumn nights.
-  Never blocks without a readable temperature; manual starts still work.
+  The temperature comes from the weather entity picked in the
+  weather-adjustment section (it is read even when the adjustment itself
+  is off); without a readable temperature it never blocks. Manual starts
+  still work.
 - **Run history** - every finished run (completed, stopped, test) is
   recorded with start time, trigger, watered seconds and weather factor -
   the status card shows the recent runs, the full history (30 entries)
@@ -221,16 +224,18 @@ else is a live setting, not a one-time config step:
 - **Zones (add/remove valves)**: go to **Settings → Devices & Services →
   Irrigation Sequencer → Configure**. This opens an options dialog where you
   can re-select the 1-10 valve/plug entities at any time. Zones that stay
-  selected keep their configured name, duration and position; newly added
-  zones get default values.
-- **Zone names, order, durations, enabled toggles, winter mode, rain pause, night start, pause
+  selected keep their configured name, duration, position and enabled
+  state; newly added zones get default values.
+- **Zone names, order, durations, enabled toggles, winter mode, frost
+  protection, rain pause, night start, run weekdays, skip-next-run, pause
   between zones, weather adjustment**: these are not part of a config dialog
   at all - they are live settings you change directly through the settings
   card (recommended), through the exposed `switch.*_winter_mode` /
-  `switch.*_weather_adjustment` entities, or via the services below (handy
-  for your own automations, e.g. "turn on winter mode every November 1st").
-  The ▶ button on a zone's settings-card row (or `run_zone`) runs just that
-  zone once for testing.
+  `switch.*_weather_adjustment` / `switch.*_frost_protection` entities and
+  the `button.*` entities (start, stop, pause, resume, single test, skip),
+  or via the services below (handy for your own automations, e.g. "turn on
+  winter mode every November 1st"). The ▶ button on a zone's
+  settings-card row (or `run_zone`) runs just that zone once for testing.
 
 ## Services
 

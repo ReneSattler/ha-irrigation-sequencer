@@ -53,8 +53,10 @@ im Browser ausprobieren kannst.*
 - **Frostschutz** – geplante Läufe optional blockieren, solange die
   aktuelle Außentemperatur auf oder unter einem Schwellwert liegt
   (Standard 2 °C) – der mildere, automatische Bruder des Wintermodus für
-  kalte Frühlings-/Herbstnächte. Blockiert nie ohne ablesbare Temperatur;
-  manuelle Starts gehen trotzdem.
+  kalte Frühlings-/Herbstnächte. Die Temperatur kommt von der
+  Wetter-Entität aus dem Wetter-Bereich (wird auch bei ausgeschalteter
+  Anpassung gelesen); ohne ablesbare Temperatur wird nie blockiert.
+  Manuelle Starts gehen trotzdem.
 - **Lauf-Verlauf** – jeder beendete Lauf (fertig, abgebrochen, Test) wird
   mit Startzeit, Auslöser, Wassersekunden und Wetterfaktor gespeichert –
   die Status-Card zeigt die letzten Läufe, der volle Verlauf (30 Einträge)
@@ -244,12 +246,15 @@ Nur die *anfängliche* Zonen-Auswahl ist ein klassischer "Einrichtungsdialog"
   Dienste → Irrigation Sequencer → Konfigurieren** öffnet sich ein
   Optionen-Dialog, in dem du die 1–10 Ventil-/Steckdosen-Entitäten jederzeit
   neu auswählen kannst. Zonen, die ausgewählt bleiben, behalten ihren Namen,
-  ihre Dauer und Position; neu hinzugefügte Zonen bekommen Standardwerte.
+  ihre Dauer, Position und Aktiv-Status; neu hinzugefügte Zonen bekommen Standardwerte.
 - **Zonen-Namen, -Reihenfolge, -Dauer, -Schalter (aktiv/inaktiv), Wintermodus,
-  Regen-Pause, Nachtstart, Pause zwischen Zonen, Wetter-Anpassung**: das sind keine
+  Frostschutz, Regen-Pause, Nachtstart, Lauftage, Einmal-Überspringen,
+  Pause zwischen Zonen, Wetter-Anpassung**: das sind keine
   Dialog-Einstellungen, sondern Live-Werte, die du direkt über die
   Settings-Card änderst (empfohlen), über die bereitgestellten Entitäten
-  `switch.*_winter_mode` / `switch.*_weather_adjustment`, oder über die
+  `switch.*_winter_mode` / `switch.*_weather_adjustment` /
+  `switch.*_frost_protection` und die `button.*`-Entitäten (Start, Stopp,
+  Pause, Fortsetzen, Einzeltest, Skip), oder über die
   Services unten (praktisch für eigene Automationen, z. B. "Wintermodus jedes
   Jahr am 1. November aktivieren"). Der ▶-Button in einer
   Settings-Card-Zonen-Zeile (oder `run_zone`) lässt nur diese Zone einmal
