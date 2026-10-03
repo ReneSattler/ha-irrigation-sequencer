@@ -28,6 +28,8 @@ from .const import (
     DEFAULT_RUN_WEEKDAYS,
     DEFAULT_FROST_PROTECTION_ENABLED,
     DEFAULT_FROST_THRESHOLD_TEMP,
+    DEFAULT_RAIN_DELAY_ENABLED,
+    DEFAULT_RAIN_DELAY_THRESHOLD_MM,
     DEFAULT_WEATHER_TEMP_SOURCE,
     DEFAULT_ZONE_DURATION_MINUTES,
     MAX_ZONE_DURATION_MINUTES,
@@ -40,6 +42,7 @@ from .const import (
     NOTIFY_MESSAGES_BY_LANGUAGE,
     STATE_FROST,
     STATE_IDLE,
+    STATE_RAIN_DELAY,
     STATE_PAUSED,
     STATE_PAUSED_BETWEEN_ZONES,
     STATE_RAIN_PAUSE,
@@ -53,8 +56,10 @@ from .const import (
     AUTO_OFF_VERIFY_SECONDS,
     MAX_AUTO_OFF_ATTEMPTS,
     MAX_FROST_THRESHOLD_TEMP,
+    MAX_RAIN_DELAY_THRESHOLD_MM,
     MAX_RUN_HISTORY_KEPT,
     MIN_FROST_THRESHOLD_TEMP,
+    MIN_RAIN_DELAY_THRESHOLD_MM,
     UNEXPECTED_ACTIVATION_MESSAGES_BY_LANGUAGE,
     UNEXPECTED_ACTIVATION_REPORT_COOLDOWN_SECONDS,
     UNEXPECTED_SOURCE_AUTOMATION,
@@ -114,6 +119,12 @@ class IrrigationSequencerManager:
         self.skip_next_run: bool = False
         self.frost_protection_enabled: bool = DEFAULT_FROST_PROTECTION_ENABLED
         self.frost_threshold_temp: float = DEFAULT_FROST_THRESHOLD_TEMP
+        self.rain_delay_enabled: bool = DEFAULT_RAIN_DELAY_ENABLED
+        self.rain_delay_threshold_mm: float = DEFAULT_RAIN_DELAY_THRESHOLD_MM
+        # Cached expected precipitation for the current calendar day
+        # (daily forecast entry 0, same convention as the forecast high).
+        # Refreshed on the forecast timer and before every run.
+        self.rain_expected_mm: float | None = None
         # One entry per finished run, newest last (see _record_run_history).
         self.run_history: list[dict[str, Any]] = []
         self.winter_mode: bool = False
@@ -260,6 +271,18 @@ class IrrigationSequencerManager:
             if validated_weekdays is not None:
                 self.run_weekdays = validated_weekdays
             self.skip_next_run = bool(data.get("skip_next_run", False))
+            self.rain_delay_enabled = bool(
+                data.get("rain_delay_enabled", DEFAULT_RAIN_DELAY_ENABLED)
+            )
+            try:
+                self.rain_delay_threshold_mm = float(
+                    data.get(
+                        "rain_delay_threshold_mm",
+                        DEFAULT_RAIN_DELAY_THRESHOLD_MM,
+                    )
+                )
+            except (TypeError, ValueError):
+                self.rain_delay_threshold_mm = DEFAULT_RAIN_DELAY_THRESHOLD_MM
             self.frost_protection_enabled = bool(
                 data.get(
                     "frost_protection_enabled", DEFAULT_FROST_PROTECTION_ENABLED
@@ -339,6 +362,8 @@ class IrrigationSequencerManager:
                 "start_times": self.start_times,
                 "run_weekdays": self.run_weekdays,
                 "skip_next_run": self.skip_next_run,
+                "rain_delay_enabled": self.rain_delay_enabled,
+                "rain_delay_threshold_mm": self.rain_delay_threshold_mm,
                 "run_history": self.run_history,
                 "frost_protection_enabled": self.frost_protection_enabled,
                 "frost_threshold_temp": self.frost_threshold_temp,
@@ -1107,8 +1132,39 @@ class IrrigationSequencerManager:
         if temp_source in WEATHER_TEMP_SOURCES:
             self.weather_temp_source = temp_source
         # The cached high belongs to the previous entity/source combination,
-        # so drop it rather than briefly scaling off the wrong number.
+        # so drop it rather than briefly scaling off the wrong number. The
+        # cached rain amount belongs to the previous entity the same way.
         self.weather_forecast_high = None
+        self.rain_expected_mm = None
+        await self._async_save()
+        self._notify_listeners()
+        await self.async_refresh_forecast()
+
+    def _rain_delay_blocking(self) -> tuple[bool, float | None]:
+        """Whether the automatic rain delay currently blocks a scheduled
+        run, plus the expected amount it decided on. Never blocks without
+        a readable forecast amount - a missing entity, a failed fetch, or
+        a provider without precipitation data fails open, since a weather
+        hiccup must not silently cancel watering."""
+        if not self.rain_delay_enabled:
+            return False, None
+        expected = self.rain_expected_mm
+        if expected is None:
+            return False, None
+        return (expected >= self.rain_delay_threshold_mm), expected
+
+    async def async_set_rain_delay(self, enabled: bool, threshold_mm: float) -> None:
+        self.rain_delay_enabled = bool(enabled)
+        try:
+            threshold = float(threshold_mm)
+        except (TypeError, ValueError):
+            threshold = self.rain_delay_threshold_mm
+        if not (MIN_RAIN_DELAY_THRESHOLD_MM <= threshold <= MAX_RAIN_DELAY_THRESHOLD_MM):
+            raise ServiceValidationError(
+                f"rain delay threshold must be between {MIN_RAIN_DELAY_THRESHOLD_MM} and "
+                f"{MAX_RAIN_DELAY_THRESHOLD_MM} mm"
+            )
+        self.rain_delay_threshold_mm = threshold
         await self._async_save()
         self._notify_listeners()
         await self.async_refresh_forecast()
@@ -1129,22 +1185,27 @@ class IrrigationSequencerManager:
         return float(temp) if temp is not None else None
 
     async def async_refresh_forecast(self) -> None:
-        """Cache the daily forecast high for the day the run starts in.
+        """Cache the daily forecast high for the day the run starts in, and
+        - when the rain delay is on - the expected precipitation for it.
 
-        Called on a timer (so the card shows a fresh number) and again
-        right before a sequence starts (so the run itself never scales off
-        a stale value). Entry 0 of the daily forecast is the current
-        calendar day, which for the typical night/early-morning schedule is
-        the day whose heat the watering is meant to cover.
+        Called on a timer (so the card shows fresh numbers) and again
+        right before a sequence starts (so a run never scales off, or
+        ignores rain from, a stale value). Entry 0 of the daily forecast
+        is the current calendar day, which for the typical
+        night/early-morning schedule is the day whose heat the watering is
+        meant to cover - and whose rain would make it pointless.
 
         Failures are swallowed deliberately: no forecast simply means
-        weather_effective_temp falls back to the current temperature, which
-        is strictly better than letting a weather integration hiccup break
-        the irrigation run.
+        weather_effective_temp falls back to the current temperature and
+        the rain delay stays open, which is strictly better than letting
+        a weather integration hiccup break or silently cancel the run.
         """
-        if not self.weather_adjustment_enabled or not self.weather_entity:
-            return
-        if self.weather_temp_source != WEATHER_TEMP_SOURCE_FORECAST_HIGH:
+        needs_temp = (
+            self.weather_adjustment_enabled
+            and self.weather_temp_source == WEATHER_TEMP_SOURCE_FORECAST_HIGH
+        )
+        needs_rain = self.rain_delay_enabled
+        if not (needs_temp or needs_rain) or not self.weather_entity:
             return
         if self.hass.states.get(self.weather_entity) is None:
             return
@@ -1159,14 +1220,23 @@ class IrrigationSequencerManager:
                 return_response=True,
             )
             forecast = (response or {}).get(self.weather_entity, {}).get("forecast") or []
-            high = forecast[0].get("temperature") if forecast else None
+            entry = forecast[0] if forecast else {}
+            high = entry.get("temperature")
             new_high = float(high) if high is not None else None
+            precipitation = entry.get("precipitation")
+            new_rain = float(precipitation) if precipitation is not None else None
         except Exception as err:  # noqa: BLE001 - never break a run over this
             _LOGGER.debug("Could not fetch forecast for %s: %s", self.weather_entity, err)
             return
 
-        if new_high != self.weather_forecast_high:
+        changed = False
+        if needs_temp and new_high != self.weather_forecast_high:
             self.weather_forecast_high = new_high
+            changed = True
+        if needs_rain and new_rain != self.rain_expected_mm:
+            self.rain_expected_mm = new_rain
+            changed = True
+        if changed:
             self._notify_listeners()
 
     @property
@@ -1275,6 +1345,9 @@ class IrrigationSequencerManager:
         frost_blocking, _ = self._frost_blocking()
         if frost_blocking:
             return True, STATE_FROST
+        rain_blocking, _ = self._rain_delay_blocking()
+        if rain_blocking:
+            return True, STATE_RAIN_DELAY
         return False, None
 
     @property

@@ -2260,3 +2260,200 @@ async def test_run_history_exposed_on_sensor(hass: HomeAssistant) -> None:
         if state.attributes.get("entry_id") == entry.entry_id
     )
     assert sensor.attributes["run_history"] == []
+
+
+# --------------------------------------------------------------------- #
+# Automatic rain delay
+# --------------------------------------------------------------------- #
+
+
+def _rainy_manager(
+    hass: HomeAssistant, precipitation: float | None
+) -> IrrigationSequencerManager:
+    """A manager with rain delay on and a cached forecast amount (None =
+    no usable precipitation data, as after a failed fetch)."""
+    manager = make_manager(hass, ["switch.zone_1"])
+    manager.weather_entity = "weather.home"
+    hass.states.async_set("weather.home", "rainy", {"temperature": 12.0})
+    manager.rain_expected_mm = precipitation
+    return manager
+
+
+async def test_rain_delay_defaults_to_off(hass: HomeAssistant) -> None:
+    manager = make_manager(hass)
+    assert manager.rain_delay_enabled is False
+    assert manager.rain_delay_threshold_mm == 2.0
+    assert manager.rain_expected_mm is None
+
+
+async def test_rain_delay_blocks_scheduled_run_at_threshold(
+    hass: HomeAssistant,
+) -> None:
+    for expected in (2.0, 8.5):
+        manager = _rainy_manager(hass, expected)
+        await manager.async_set_rain_delay(True, 2.0)
+
+        calls = []
+
+        async def fake_set_valve(eid, on):
+            calls.append((eid, on))
+
+        manager._async_set_valve = fake_set_valve
+        await manager.async_start_now(triggered_by_schedule=True)
+
+        assert manager.status == "rain_delay"
+        assert calls == []
+        assert manager.next_run is None
+
+
+async def test_rain_delay_allows_run_below_threshold(
+    hass: HomeAssistant,
+) -> None:
+    manager = _rainy_manager(hass, 1.5)
+    await manager.async_set_zone_duration("switch.zone_1", 1)
+    await manager.async_set_rain_delay(True, 2.0)
+
+    async def fake_set_valve(eid, on):
+        pass
+
+    manager._async_set_valve = fake_set_valve
+    with patch("asyncio.sleep", _instant_sleep):
+        await manager.async_start_now(triggered_by_schedule=True)
+        assert manager._run_task is not None
+        await asyncio.wait_for(manager._run_task, timeout=5)
+
+    assert manager.status == "idle"
+    assert len(manager.last_run_zones) == 1
+
+
+async def test_rain_delay_never_blocks_without_data(
+    hass: HomeAssistant,
+) -> None:
+    """No entity, no cached amount (failed fetch / provider without
+    precipitation data) - all fail open."""
+    plain = make_manager(hass)
+    await plain.async_set_rain_delay(True, 2.0)
+    blocked, _ = plain._is_blocked()
+    assert blocked is False
+
+    no_data = _rainy_manager(hass, None)
+    await no_data.async_set_rain_delay(True, 2.0)
+    blocked, _ = no_data._is_blocked()
+    assert blocked is False
+
+
+async def _fake_daily_forecast(hass: HomeAssistant, entries: list) -> None:
+    """Stand in for a weather integration: answers get_forecasts with the
+    given daily entries."""
+    from homeassistant.core import SupportsResponse
+
+    async def fake_handler(call):
+        return {call.data["entity_id"]: {"forecast": entries}}
+
+    hass.services.async_register(
+        "weather",
+        "get_forecasts",
+        fake_handler,
+        supports_response=SupportsResponse.ONLY,
+    )
+
+
+async def test_forecast_refresh_caches_rain_amount(
+    hass: HomeAssistant,
+) -> None:
+    """The daily fetch fills the rain cache alongside the temperature
+    high, in a single service call."""
+    manager = make_manager(hass, ["switch.zone_1"])
+    manager.weather_entity = "weather.home"
+    hass.states.async_set("weather.home", "rainy", {"temperature": 12.0})
+    await manager.async_set_rain_delay(True, 2.0)
+    await _fake_daily_forecast(
+        hass, [{"temperature": 18.0, "precipitation": 5.5}]
+    )
+
+    await manager.async_refresh_forecast()
+
+    assert manager.rain_expected_mm == 5.5
+
+
+async def test_forecast_without_precipitation_stays_open(
+    hass: HomeAssistant,
+) -> None:
+    """A provider that reports no precipitation field must not block -
+    and must not crash the refresh either."""
+    manager = make_manager(hass, ["switch.zone_1"])
+    manager.weather_entity = "weather.home"
+    hass.states.async_set("weather.home", "sunny", {"temperature": 22.0})
+    await manager.async_set_rain_delay(True, 2.0)
+    await _fake_daily_forecast(hass, [{"temperature": 24.0}])
+
+    await manager.async_refresh_forecast()
+
+    assert manager.rain_expected_mm is None
+    blocked, _ = manager._is_blocked()
+    assert blocked is False
+
+
+async def test_manual_start_bypasses_rain_delay(
+    hass: HomeAssistant,
+) -> None:
+    manager = _rainy_manager(hass, 9.0)
+    await manager.async_set_zone_duration("switch.zone_1", 1)
+    await manager.async_set_rain_delay(True, 2.0)
+
+    async def fake_set_valve(eid, on):
+        pass
+
+    manager._async_set_valve = fake_set_valve
+    with patch("asyncio.sleep", _instant_sleep):
+        await manager.async_start_now()
+        assert manager._run_task is not None
+        await asyncio.wait_for(manager._run_task, timeout=5)
+
+    assert len(manager.last_run_zones) == 1
+
+
+async def test_rain_delay_threshold_validation_and_persistence(
+    hass: HomeAssistant,
+) -> None:
+    manager = make_manager(hass)
+    await manager.async_set_rain_delay(True, 5.0)
+    assert manager.rain_delay_threshold_mm == 5.0
+
+    with pytest.raises(ServiceValidationError):
+        await manager.async_set_rain_delay(True, 100.0)
+    assert manager.rain_delay_threshold_mm == 5.0
+
+    reloaded = make_manager(hass)
+    await reloaded.async_load()
+    assert reloaded.rain_delay_enabled is True
+    assert reloaded.rain_delay_threshold_mm == 5.0
+
+
+async def test_rain_delay_service_and_switch_are_registered(
+    hass: HomeAssistant,
+) -> None:
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.irrigation_sequencer.const import CONF_ZONE_ENTITIES, DOMAIN
+
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={CONF_ZONE_ENTITIES: ["switch.zone_1"]}
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.services.has_service(DOMAIN, "set_rain_delay")
+    switch_ids = [state.entity_id for state in hass.states.async_all("switch")]
+    assert any("rain_delay" in entity_id for entity_id in switch_ids)
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_rain_delay",
+        {"entry_id": entry.entry_id, "enabled": True, "threshold_mm": 4.0},
+        blocking=True,
+    )
+    manager = hass.data[DOMAIN][entry.entry_id]
+    assert manager.rain_delay_enabled is True
+    assert manager.rain_delay_threshold_mm == 4.0

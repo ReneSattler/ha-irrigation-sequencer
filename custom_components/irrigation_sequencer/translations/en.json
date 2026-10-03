@@ -44,7 +44,8 @@
           "paused": "Paused",
           "winter_mode": "Winter mode",
           "rain_pause": "Rain pause",
-          "frost": "Frost protection"
+          "frost": "Frost protection",
+          "rain_delay": "Rain delay"
         }
       }
     },
@@ -60,6 +61,9 @@
       },
       "frost_protection": {
         "name": "Frost protection"
+      },
+      "rain_delay": {
+        "name": "Automatic rain delay"
       }
     },
     "button": {
