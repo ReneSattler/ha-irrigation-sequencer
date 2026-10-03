@@ -41,6 +41,7 @@
           "idle": "Idle",
           "running": "Irrigating",
           "paused_between_zones": "Pause between zones",
+          "paused": "Paused",
           "winter_mode": "Winter mode",
           "rain_pause": "Rain pause"
         }
@@ -63,6 +64,12 @@
       },
       "stop": {
         "name": "Stop"
+      },
+      "pause": {
+        "name": "Pause"
+      },
+      "resume": {
+        "name": "Resume"
       }
     }
   }

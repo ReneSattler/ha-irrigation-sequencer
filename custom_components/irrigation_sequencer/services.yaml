@@ -229,3 +229,23 @@ stop:
       required: true
       selector:
         text:
+
+pause:
+  name: Pause sequence
+  description: >-
+    Freezes a running irrigation sequence in place: the open valve is
+    closed immediately and no water time is counted until resumed.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+
+resume:
+  name: Resume sequence
+  description: Continues a paused irrigation sequence where it left off.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:

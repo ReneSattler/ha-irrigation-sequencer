@@ -72,6 +72,9 @@ STORAGE_KEY_PREFIX = f"{DOMAIN}_state"
 STATE_IDLE = "idle"
 STATE_RUNNING = "running"
 STATE_PAUSED_BETWEEN_ZONES = "paused_between_zones"
+# Set by the user holding a running sequence via pause/resume - distinct
+# from paused_between_zones, which is the scheduled wait between zones.
+STATE_PAUSED = "paused"
 STATE_WINTER_MODE = "winter_mode"
 STATE_RAIN_PAUSE = "rain_pause"
 
@@ -88,6 +91,8 @@ SERVICE_SET_NOTIFY_TARGET = "set_notify_target"
 SERVICE_SET_AUTO_OFF_UNEXPECTED = "set_auto_off_unexpected"
 SERVICE_START_NOW = "start_now"
 SERVICE_STOP = "stop"
+SERVICE_PAUSE = "pause"
+SERVICE_RESUME = "resume"
 
 ATTR_ZONES = "zones"
 ATTR_PAUSE_BETWEEN_ZONES_SECONDS = "pause_between_zones_seconds"

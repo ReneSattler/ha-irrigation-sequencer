@@ -40,6 +40,12 @@ im Browser ausprobieren kannst.*
 - **Individuelle Dauer pro Zone** – jede Zone hat ihre eigene Bewässerungsdauer (Minuten)
 - **Pause zwischen den Zonen** – konfigurierbare Wartezeit, bevor die nächste Zone startet
 - **1–3 tägliche Startzeiten** – z. B. ein früher und ein später Lauf am Tag, jede startet unabhängig eine vollständige Sequenz. Zeiten, die sich überschneiden würden (näher beieinander als ein Durchlauf dauert), werden mit klarer Meldung abgelehnt – sowohl in der Card als auch bei Nutzung des Service.
+- **Pause und Fortsetzen** – einen laufenden Durchlauf anhalten (das offene
+  Ventil schließt sofort, es wird keine Wasserzeit gezählt) und an der
+  unterbrochenen Stelle fortsetzen – über die Pause-/Fortsetzen-Buttons der
+  Status-Card, die neuen Button-Entitäten oder die Services
+  `irrigation_sequencer.pause` / `.resume`. Stoppen aus der Pause bricht den
+  Lauf wie gewohnt ab.
 - **Wintermodus** – ein Schalter, der die gesamte Bewässerung komplett deaktiviert
 - **Regen-Pause** – die Sequenz für 1 bis 24 Tage manuell aussetzen (z. B. nach
   Regen) über einen einzigen Schieberegler, der sie auch wieder ausschaltet
@@ -232,6 +238,8 @@ eigene Automationen:
 |---|---|
 | `irrigation_sequencer.start_now` | Sequenz sofort manuell starten |
 | `irrigation_sequencer.stop` | Laufende Sequenz sofort abbrechen |
+| `irrigation_sequencer.pause` | Laufende Sequenz anhalten (Ventil schließt, Zeiten stehen still) |
+| `irrigation_sequencer.resume` | Pausierte Sequenz an der unterbrochenen Stelle fortsetzen |
 | `irrigation_sequencer.set_zone_order` | Reihenfolge der Zonen festlegen |
 | `irrigation_sequencer.set_zone_name` | Eigenen Anzeigenamen für eine Zone setzen |
 | `irrigation_sequencer.set_zone_duration` | Bewässerungsdauer einer Zone setzen |

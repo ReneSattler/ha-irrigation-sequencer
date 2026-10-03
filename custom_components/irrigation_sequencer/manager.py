@@ -35,6 +35,7 @@ from .const import (
     MIN_WEATHER_FACTOR,
     NOTIFY_MESSAGES_BY_LANGUAGE,
     STATE_IDLE,
+    STATE_PAUSED,
     STATE_PAUSED_BETWEEN_ZONES,
     STATE_RAIN_PAUSE,
     STATE_RUNNING,
@@ -130,6 +131,19 @@ class IrrigationSequencerManager:
         # every path into _async_run_sequence.
         self._sequence_running = False
         self._stop_requested = False
+        # User-requested hold on a running sequence (see async_pause /
+        # async_resume). Deliberately not persisted: a restart always fails
+        # safe back to idle with all valves closed instead of resuming a
+        # stale run.
+        self._paused = False
+        self._paused_phase: str | None = None
+        # The valve the pause closed (None when paused during the wait
+        # between zones, where nothing is open) - reopened on resume.
+        self._pause_valve_entity_id: str | None = None
+        # The valve the sequence currently holds open, if any - the only
+        # thing a pause is allowed to close.
+        self._active_valve_entity_id: str | None = None
+        self._pause_started_monotonic: float | None = None
         self._unsub_daily_triggers: list[Callable[[], None]] = []
         self._listeners: list[Callable[[], None]] = []
         # What actually happened in the most recent run, one entry per zone,
@@ -1168,6 +1182,70 @@ class IrrigationSequencerManager:
         if self._run_task and not self._run_task.done():
             await self._run_task
 
+    async def async_pause(self) -> None:
+        """Freeze a running sequence in place.
+
+        The currently open valve (if any) is closed immediately and the
+        tick loops stop counting until async_resume - no water time is
+        counted while paused, and the countdowns simply stand still.
+        Pausing during the wait between zones freezes that countdown the
+        same way. A scheduled trigger firing while paused is ignored like
+        any other start against a sequence that owns the valves; stop
+        from a paused state aborts the run as usual."""
+        if not self._sequence_active:
+            _LOGGER.warning("No irrigation sequence running, ignoring pause request")
+            return
+        if self._paused:
+            _LOGGER.warning("Irrigation sequence is already paused, ignoring pause request")
+            return
+        self._paused = True
+        self._paused_phase = self.status
+        self._pause_started_monotonic = time.monotonic()
+        self._pause_valve_entity_id = self._active_valve_entity_id
+        if self._pause_valve_entity_id is not None:
+            await self._async_set_valve(self._pause_valve_entity_id, False)
+        self.status = STATE_PAUSED
+        _LOGGER.info(
+            "Irrigation sequence paused during %s%s",
+            self._paused_phase,
+            f" (closed {self._pause_valve_entity_id})"
+            if self._pause_valve_entity_id is not None
+            else "",
+        )
+        self._notify_listeners()
+
+    async def async_resume(self) -> None:
+        """Continue a paused sequence where it left off."""
+        if not self._paused:
+            _LOGGER.warning("Irrigation sequence is not paused, ignoring resume request")
+            return
+        paused_for = (
+            time.monotonic() - self._pause_started_monotonic
+            if self._pause_started_monotonic is not None
+            else 0.0
+        )
+        if self._pause_valve_entity_id is not None:
+            await self._async_set_valve(self._pause_valve_entity_id, True)
+            self._active_valve_entity_id = self._pause_valve_entity_id
+        self.status = self._paused_phase or STATE_RUNNING
+        self._paused = False
+        self._paused_phase = None
+        self._pause_valve_entity_id = None
+        self._pause_started_monotonic = None
+        _LOGGER.info("Irrigation sequence resumed after %.0fs paused", paused_for)
+        self._notify_listeners()
+
+    async def _async_wait_while_paused(self) -> bool:
+        """Hold a tick loop while the sequence is paused.
+
+        Returns False if a stop was requested meanwhile, so callers break
+        out the same way they do on stop. Counters are only advanced after
+        this returns True, which is what keeps paused time out of every
+        elapsed/remaining number by construction."""
+        while self._paused and not self._stop_requested:
+            await asyncio.sleep(0.2)
+        return not self._stop_requested
+
     def _zone_duration_seconds(self, zone: dict[str, Any]) -> int:
         base_seconds = zone["duration_minutes"] * 60
         return max(1, round(base_seconds * self.weather_current_factor))
@@ -1265,6 +1343,7 @@ class IrrigationSequencerManager:
                 )
 
                 await self._async_set_valve(entity_id, True)
+                self._active_valve_entity_id = entity_id
                 expected_on_state = _on_state_for(entity_id)
                 external_off_at: int | None = None
                 # Tick once per second (instead of one long sleep) so the
@@ -1278,6 +1357,8 @@ class IrrigationSequencerManager:
                     if zone_elapsed >= final_target:
                         break
                     await asyncio.sleep(1)
+                    if not await self._async_wait_while_paused():
+                        break
                     zone_elapsed += 1
                     run_elapsed += 1
                     # We only ever *command* this entity here - nothing reads
@@ -1308,6 +1389,7 @@ class IrrigationSequencerManager:
                     )
                     self._notify_listeners()
                 await self._async_set_valve(entity_id, False)
+                self._active_valve_entity_id = None
                 _LOGGER.info(
                     "Zone %s finished: elapsed=%ds target_at_start=%ds target_at_finish=%ds "
                     "external_off_detected_at=%s stopped_early=%s",
@@ -1347,6 +1429,8 @@ class IrrigationSequencerManager:
                         if pause_elapsed >= target:
                             break
                         await asyncio.sleep(1)
+                        if not await self._async_wait_while_paused():
+                            break
                         pause_elapsed += 1
                         run_elapsed += 1
                         pause_left = max(0, self.pause_between_zones_seconds - pause_elapsed)
@@ -1366,6 +1450,13 @@ class IrrigationSequencerManager:
             self.seconds_remaining_zone = 0
             self.seconds_remaining_total = 0
             self._stop_requested = False
+            # A stop (or unload, or restart) while paused ends the hold
+            # outright - there is no resuming a run that no longer exists.
+            self._paused = False
+            self._paused_phase = None
+            self._pause_valve_entity_id = None
+            self._active_valve_entity_id = None
+            self._pause_started_monotonic = None
             self._notify_listeners()
             # Count the seconds actually spent running rather than deriving
             # them from a planned total - the plan can change mid-run now.

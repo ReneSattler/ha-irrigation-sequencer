@@ -36,6 +36,11 @@ Home Assistant instance.*
 - **Per-zone duration** - every zone has its own irrigation duration (minutes)
 - **Pause between zones** - configurable wait time before the next zone starts
 - **1-3 daily start times** - e.g. an early-morning and a late-evening run, each independently triggering a full sequence. Times that would overlap (closer together than a full run takes) are rejected with a clear message, both in the card and if set via the service.
+- **Pause and resume** - freeze a running sequence in place (the open valve
+  closes immediately, no water time is counted) and continue where it left
+  off - via the status card's pause/resume buttons, the new button entities,
+  or the `irrigation_sequencer.pause` / `.resume` services. Stopping from a
+  paused state aborts the run as usual.
 - **Winter mode** - a single switch that fully disables irrigation
 - **Rain pause** - manually pause the sequence for 1 to 24 days (e.g. after
   rainfall) via a single slider that also turns it off again (drag to 0); the
@@ -212,6 +217,8 @@ automations:
 |---|---|
 | `irrigation_sequencer.start_now` | Start the sequence immediately |
 | `irrigation_sequencer.stop` | Abort a running sequence immediately |
+| `irrigation_sequencer.pause` | Freeze a running sequence (valve closes, timers hold) |
+| `irrigation_sequencer.resume` | Continue a paused sequence where it left off |
 | `irrigation_sequencer.set_zone_order` | Set the irrigation order of the zones |
 | `irrigation_sequencer.set_zone_name` | Set a custom display name for a zone |
 | `irrigation_sequencer.set_zone_duration` | Set the irrigation duration of a zone |
