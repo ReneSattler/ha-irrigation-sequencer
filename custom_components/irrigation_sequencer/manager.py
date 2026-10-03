@@ -25,6 +25,7 @@ from .const import (
     DEFAULT_WEATHER_HOT_FACTOR,
     DEFAULT_WEATHER_HOT_TEMP,
     DEFAULT_WEATHER_REFERENCE_TEMP,
+    DEFAULT_RUN_WEEKDAYS,
     DEFAULT_WEATHER_TEMP_SOURCE,
     DEFAULT_ZONE_DURATION_MINUTES,
     MAX_ZONE_DURATION_MINUTES,
@@ -100,6 +101,7 @@ class IrrigationSequencerManager:
         ]
         self.pause_between_zones_seconds: int = DEFAULT_PAUSE_SECONDS
         self.start_times: list[str] = [DEFAULT_START_TIME]
+        self.run_weekdays: list[int] = list(DEFAULT_RUN_WEEKDAYS)
         self.winter_mode: bool = False
         self.rain_pause_until: str | None = None
         # Notify service name (e.g. "mobile_app_my_phone", the part after
@@ -240,6 +242,9 @@ class IrrigationSequencerManager:
                 self.start_times = data["start_times"] or [DEFAULT_START_TIME]
             elif "start_time" in data:
                 self.start_times = [data["start_time"]]
+            validated_weekdays = self._coerce_weekdays(data.get("run_weekdays"))
+            if validated_weekdays is not None:
+                self.run_weekdays = validated_weekdays
             self.winter_mode = data.get("winter_mode", False)
             self.rain_pause_until = data.get("rain_pause_until")
             self.notify_target = data.get("notify_target")
@@ -305,6 +310,7 @@ class IrrigationSequencerManager:
                 "zones": self.zones,
                 "pause_between_zones_seconds": self.pause_between_zones_seconds,
                 "start_times": self.start_times,
+                "run_weekdays": self.run_weekdays,
                 "winter_mode": self.winter_mode,
                 "rain_pause_until": self.rain_pause_until,
                 "notify_target": self.notify_target,
@@ -972,6 +978,36 @@ class IrrigationSequencerManager:
         self._schedule_daily_trigger()
         self._notify_listeners()
 
+    @staticmethod
+    def _coerce_weekdays(value: Any) -> list[int] | None:
+        """Normalize a weekday selection to a sorted, de-duplicated list of
+        ISO weekdays (Monday=1 .. Sunday=7). Returns None for anything that
+        carries no usable day, so callers can fall back to the default."""
+        if not isinstance(value, (list, tuple, set)):
+            return None
+        days = set()
+        for item in value:
+            try:
+                day = int(item)
+            except (TypeError, ValueError):
+                return None
+            if not 1 <= day <= 7:
+                return None
+            days.add(day)
+        return sorted(days) or None
+
+    async def async_set_run_weekdays(self, weekdays: list[int]) -> None:
+        coerced = self._coerce_weekdays(weekdays)
+        if coerced is None:
+            raise ServiceValidationError(
+                "run_weekdays must be a non-empty list of ISO weekdays (Monday=1 .. Sunday=7)"
+            )
+        self.run_weekdays = coerced
+        await self._async_save()
+        # No trigger re-scheduling needed: the daily triggers stay as they
+        # are and the filter applies when they fire (plus next_run below).
+        self._notify_listeners()
+
     def _raise_if_start_times_overlap(self, sorted_times: list[str]) -> None:
         """Reject start times closer together than a full sequence takes to
         run. The duration is an estimate from the currently configured zone
@@ -1158,6 +1194,12 @@ class IrrigationSequencerManager:
 
     @callback
     def _handle_daily_trigger(self, now: datetime) -> None:
+        if now.isoweekday() not in self.run_weekdays:
+            _LOGGER.info(
+                "Skipping scheduled irrigation start: %s is not an enabled weekday",
+                now.strftime("%A"),
+            )
+            return
         self.hass.async_create_task(self.async_start_now(triggered_by_schedule=True))
 
     def _is_blocked(self) -> tuple[bool, str | None]:
@@ -1181,13 +1223,21 @@ class IrrigationSequencerManager:
             return None
         now = dt_util.now()
         candidates = []
-        for start_time in self.start_times:
-            hour, minute, second = (int(part) for part in start_time.split(":"))
-            candidate = now.replace(hour=hour, minute=minute, second=second, microsecond=0)
-            if candidate <= now:
-                candidate += timedelta(days=1)
-            candidates.append(candidate)
-        return min(candidates).isoformat()
+        # Walk a full week from today so the next run lands on an enabled
+        # weekday - at least one day is always enabled (validated on set).
+        for offset in range(8):
+            day = now + timedelta(days=offset)
+            if day.isoweekday() not in self.run_weekdays:
+                continue
+            for start_time in self.start_times:
+                hour, minute, second = (int(part) for part in start_time.split(":"))
+                candidate = day.replace(
+                    hour=hour, minute=minute, second=second, microsecond=0
+                )
+                if candidate <= now:
+                    continue
+                candidates.append(candidate)
+        return min(candidates).isoformat() if candidates else None
 
     # ------------------------------------------------------------------ #
     # Running the sequence

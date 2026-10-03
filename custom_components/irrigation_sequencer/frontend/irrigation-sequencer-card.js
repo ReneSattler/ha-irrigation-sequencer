@@ -71,6 +71,8 @@ const TRANSLATIONS = {
     stop: "Stop",
     pause: "Pause",
     resume: "Resume",
+    runDays: "Run days",
+    weekdayNames: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
     nextRun: "Next run",
     totalDuration: "Total duration",
     totalRemaining: "Total remaining",
@@ -137,6 +139,8 @@ const TRANSLATIONS = {
     stop: "Stoppen",
     pause: "Pause",
     resume: "Fortsetzen",
+    runDays: "Lauftage",
+    weekdayNames: ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"],
     nextRun: "Nächster Lauf",
     totalDuration: "Gesamtdauer",
     totalRemaining: "Gesamt verbleibend",
@@ -664,6 +668,7 @@ class IrrigationSequencerBaseCard extends HTMLElement {
       .chip:hover { background: var(--secondary-background-color); }
       .chip-clear { border-color: var(--warning-color, #ff9800); color: var(--warning-color, #ff9800); }
       .chip-static { cursor: default; display: flex; align-items: center; gap: 6px; }
+      .chip-static.clickable { cursor: pointer; display: inline-block; }
       .chip-static.active { border-color: var(--success-color, #4caf50); color: var(--success-color, #4caf50); background: color-mix(in srgb, var(--success-color, #4caf50) 12%, transparent); }
       .chip-badge { width: 16px; height: 16px; border-radius: 50%; background: var(--primary-color); color: white;
         display: flex; align-items: center; justify-content: center; font-size: 0.65em; flex-shrink: 0; }
@@ -962,6 +967,7 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
             <div class="tile-row-label">${t.nightStart}</div>
             <div class="tile-row-control" style="flex-direction: column; align-items: stretch; gap: 8px;">
               ${this._renderStartTimes(attrs)}
+              ${this._renderWeekdays(attrs, t)}
             </div>
           </div>
           <div class="tile-row" style="--tile-color: var(--info-color, #03a9f4)">
@@ -1120,6 +1126,23 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
     return `${rows}${addButton}<div id="start-times-warning" style="display:none; color: var(--error-color, #db4437); font-size: 0.8em;"></div>`;
   }
 
+  /** Weekday filter chips (Mon-Sun) under the start times. Toggling sends
+   * the full 1-7 day list; the last active day can't be switched off (the
+   * backend rejects an empty list, so the click is ignored instead). */
+  _renderWeekdays(attrs, t) {
+    const active = new Set(
+      (attrs.run_weekdays && attrs.run_weekdays.length ? attrs.run_weekdays : [1, 2, 3, 4, 5, 6, 7]).map(Number)
+    );
+    const chips = t.weekdayNames
+      .map(
+        (name, i) => `
+          <button class="chip chip-static clickable ${active.has(i + 1) ? "active" : ""}" data-weekday="${i + 1}"
+            title="${t.runDays}" style="min-width: 40px;">${name}</button>`
+      )
+      .join("");
+    return `<div class="chip-row" style="margin-top:0;">${chips}</div>`;
+  }
+
   /** Same overlap rule the backend enforces (manager._raise_if_start_times_overlap),
    * checked client-side first so the user gets immediate inline feedback
    * instead of only a service-call error toast after the fact. */
@@ -1273,6 +1296,28 @@ class IrrigationSequencerSettingsCard extends IrrigationSequencerBaseCard {
       const times = readRowTimes();
       times.push("12:00:00");
       submitStartTimes(times);
+    });
+    root.querySelectorAll("[data-weekday]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const attrs = this._entityState().attributes;
+        const current = new Set(
+          (attrs.run_weekdays && attrs.run_weekdays.length
+            ? attrs.run_weekdays
+            : [1, 2, 3, 4, 5, 6, 7]
+          ).map(Number)
+        );
+        const day = parseInt(btn.dataset.weekday, 10);
+        if (current.has(day)) {
+          // The backend rejects an empty list - keep the last day on.
+          if (current.size <= 1) return;
+          current.delete(day);
+        } else {
+          current.add(day);
+        }
+        this._releaseRenderSuppression(
+          this._callService("set_run_weekdays", { weekdays: [...current].sort((a, b) => a - b) })
+        );
+      });
     });
 
     const pauseRange = root.getElementById("pause-range");

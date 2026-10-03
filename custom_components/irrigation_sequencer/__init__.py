@@ -51,6 +51,7 @@ from .const import (
     SERVICE_SET_WEATHER_ADJUSTMENT,
     SERVICE_SET_WINTER_MODE,
     SERVICE_RUN_ZONE,
+    SERVICE_SET_RUN_WEEKDAYS,
     SERVICE_SET_ZONE_DURATION,
     SERVICE_SET_ZONE_ENABLED,
     SERVICE_SET_ZONE_NAME,
@@ -110,6 +111,16 @@ SET_START_TIMES_SCHEMA = vol.Schema(
         vol.Required("entry_id"): cv.string,
         vol.Required("start_times"): vol.All(
             cv.ensure_list, [cv.time], vol.Length(min=MIN_START_TIMES, max=MAX_START_TIMES)
+        ),
+    }
+)
+SET_RUN_WEEKDAYS_SCHEMA = vol.Schema(
+    {
+        vol.Required("entry_id"): cv.string,
+        vol.Required("weekdays"): vol.All(
+            cv.ensure_list,
+            [vol.All(vol.Coerce(int), vol.Range(min=1, max=7))],
+            vol.Length(min=1, max=7),
         ),
     }
 )
@@ -343,6 +354,10 @@ def _async_register_services(hass: HomeAssistant) -> None:
         manager = _get_manager(hass, call.data["entry_id"])
         await manager.async_set_start_times([str(t) for t in call.data["start_times"]])
 
+    async def handle_set_run_weekdays(call: ServiceCall) -> None:
+        manager = _get_manager(hass, call.data["entry_id"])
+        await manager.async_set_run_weekdays(call.data["weekdays"])
+
     async def handle_set_rain_pause(call: ServiceCall) -> None:
         manager = _get_manager(hass, call.data["entry_id"])
         await manager.async_set_rain_pause(call.data["days"])
@@ -417,6 +432,12 @@ def _async_register_services(hass: HomeAssistant) -> None:
     )
     hass.services.async_register(
         DOMAIN, SERVICE_SET_START_TIMES, handle_set_start_times, schema=SET_START_TIMES_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_RUN_WEEKDAYS,
+        handle_set_run_weekdays,
+        schema=SET_RUN_WEEKDAYS_SCHEMA,
     )
     hass.services.async_register(
         DOMAIN, SERVICE_SET_RAIN_PAUSE, handle_set_rain_pause, schema=SET_RAIN_PAUSE_SCHEMA

@@ -94,6 +94,10 @@
       "name": "Startzeiten setzen",
       "description": "Legt die täglichen (nächtlichen) Startzeiten der Sequenz fest (1-3 Zeiten, jede startet einen vollständigen Durchlauf)."
     },
+    "set_run_weekdays": {
+      "name": "Lauftage setzen",
+      "description": "Beschränkt geplante Läufe auf ausgewählte Wochentage (ISO: Montag=1 .. Sonntag=7). Manuelle Starts gehen immer. Standard ist jeder Tag."
+    },
     "set_rain_pause": {
       "name": "Regen-Pause setzen",
       "description": "Setzt die Bewässerung für 1-24 Tage aus (z. B. nach Regen)."

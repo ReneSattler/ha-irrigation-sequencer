@@ -138,6 +138,7 @@
       zones,
       pause_between_zones_seconds: 120,
       start_times: ["05:00:00", "18:30:00"],
+      run_weekdays: [1, 2, 3, 4, 5, 6, 7],
       winter_mode: false,
       rain_pause_until: null,
       current_zone_index: isRunning ? 2 : null,
@@ -237,6 +238,7 @@
       if (domain !== "irrigation_sequencer") return Promise.resolve();
       const zone = (id) => statusAttrs.zones.find((z) => z.entity_id === id);
       if (service === "set_start_times") statusAttrs.start_times = data.start_times;
+      if (service === "set_run_weekdays") statusAttrs.run_weekdays = data.weekdays;
       if (service === "set_zone_duration" && zone(data.entity_id)) {
         zone(data.entity_id).duration_minutes = data.minutes;
         recomputeEstimatedTotalSeconds();
