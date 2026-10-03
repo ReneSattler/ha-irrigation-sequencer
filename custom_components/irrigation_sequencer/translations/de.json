@@ -122,6 +122,14 @@
       "name": "Sequenz stoppen",
       "description": "Bricht eine laufende Bewässerungssequenz sofort ab."
     },
+    "run_zone": {
+      "name": "Einzelne Zone laufen lassen",
+      "description": "Lässt eine Zone einmal zum Testen laufen (z. B. neuer Sprinklerkopf). Nutzt die eingestellte Zonen-Dauer, falls minutes nicht angegeben ist; der Wetter-Faktor wird nie angewendet."
+    },
+    "set_zone_enabled": {
+      "name": "Zone aktivieren/deaktivieren",
+      "description": "Nimmt eine Zone in die Sequenz auf oder aus, ohne sie zu entfernen. Eine deaktivierte Zone wird nie geöffnet und trägt zu keiner Dauer bei; gilt ab dem nächsten Lauf."
+    },
     "pause": {
       "name": "Sequenz pausieren",
       "description": "Hält eine laufende Bewässerungssequenz an: Das offene Ventil wird sofort geschlossen und es wird keine Wasserzeit gezählt, bis fortgesetzt wird."

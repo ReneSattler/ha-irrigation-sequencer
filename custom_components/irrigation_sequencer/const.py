@@ -92,6 +92,7 @@ SERVICE_SET_NOTIFY_TARGET = "set_notify_target"
 SERVICE_SET_AUTO_OFF_UNEXPECTED = "set_auto_off_unexpected"
 SERVICE_START_NOW = "start_now"
 SERVICE_STOP = "stop"
+SERVICE_RUN_ZONE = "run_zone"
 SERVICE_PAUSE = "pause"
 SERVICE_RESUME = "resume"
 
