@@ -40,6 +40,14 @@ DEFAULT_AUTO_OFF_UNEXPECTED = True
 MIN_RAIN_PAUSE_DAYS = 1
 MAX_RAIN_PAUSE_DAYS = 24
 
+# Automatic rain delay: block scheduled runs when the daily forecast
+# expects at least this much precipitation for the current calendar day.
+# Strictly opt-in (default off) - without it nothing changes.
+DEFAULT_RAIN_DELAY_ENABLED = False
+DEFAULT_RAIN_DELAY_THRESHOLD_MM = 2.0
+MIN_RAIN_DELAY_THRESHOLD_MM = 0.5
+MAX_RAIN_DELAY_THRESHOLD_MM = 20.0
+
 # Frost protection: block scheduled runs while the current outside
 # temperature is at or below this threshold. Disabled by default.
 DEFAULT_FROST_PROTECTION_ENABLED = False
@@ -81,6 +89,7 @@ STORAGE_VERSION = 1
 STORAGE_KEY_PREFIX = f"{DOMAIN}_state"
 
 STATE_FROST = "frost"
+STATE_RAIN_DELAY = "rain_delay"
 STATE_IDLE = "idle"
 STATE_RUNNING = "running"
 STATE_PAUSED_BETWEEN_ZONES = "paused_between_zones"
@@ -92,6 +101,7 @@ STATE_RAIN_PAUSE = "rain_pause"
 
 SERVICE_SET_RUN_WEEKDAYS = "set_run_weekdays"
 SERVICE_SET_FROST_PROTECTION = "set_frost_protection"
+SERVICE_SET_RAIN_DELAY = "set_rain_delay"
 SERVICE_SKIP_NEXT_RUN = "skip_next_run"
 SERVICE_CLEAR_SKIP_NEXT_RUN = "clear_skip_next_run"
 SERVICE_SET_ZONE_ORDER = "set_zone_order"
@@ -119,6 +129,9 @@ ATTR_RUN_WEEKDAYS = "run_weekdays"
 ATTR_SKIP_NEXT_RUN = "skip_next_run"
 ATTR_FROST_PROTECTION_ENABLED = "frost_protection_enabled"
 ATTR_FROST_THRESHOLD_TEMP = "frost_threshold_temp"
+ATTR_RAIN_DELAY_ENABLED = "rain_delay_enabled"
+ATTR_RAIN_DELAY_THRESHOLD_MM = "rain_delay_threshold_mm"
+ATTR_RAIN_EXPECTED_MM = "rain_expected_mm"
 ATTR_RUN_HISTORY = "run_history"
 ATTR_WINTER_MODE = "winter_mode"
 ATTR_RAIN_PAUSE_UNTIL = "rain_pause_until"

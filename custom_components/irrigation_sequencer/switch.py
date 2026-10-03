@@ -21,6 +21,7 @@ async def async_setup_entry(
             IrrigationSequencerWeatherAdjustmentSwitch(manager, entry),
             IrrigationSequencerAutoOffUnexpectedSwitch(manager, entry),
             IrrigationSequencerFrostProtectionSwitch(manager, entry),
+            IrrigationSequencerRainDelaySwitch(manager, entry),
         ]
     )
 
@@ -142,4 +143,30 @@ class IrrigationSequencerFrostProtectionSwitch(_BaseSwitch):
     async def async_turn_off(self, **kwargs) -> None:
         await self._manager.async_set_frost_protection(
             False, self._manager.frost_threshold_temp
+        )
+
+
+class IrrigationSequencerRainDelaySwitch(_BaseSwitch):
+    """Switch for the automatic, forecast-based rain delay - strictly
+    opt-in, so an instance that never enables it behaves exactly as
+    before this feature existed."""
+
+    _attr_translation_key = "rain_delay"
+    _attr_icon = "mdi:weather-rainy"
+
+    def __init__(self, manager: IrrigationSequencerManager, entry: ConfigEntry) -> None:
+        super().__init__(manager, entry, "rain_delay")
+
+    @property
+    def is_on(self) -> bool:
+        return self._manager.rain_delay_enabled
+
+    async def async_turn_on(self, **kwargs) -> None:
+        await self._manager.async_set_rain_delay(
+            True, self._manager.rain_delay_threshold_mm
+        )
+
+    async def async_turn_off(self, **kwargs) -> None:
+        await self._manager.async_set_rain_delay(
+            False, self._manager.rain_delay_threshold_mm
         )

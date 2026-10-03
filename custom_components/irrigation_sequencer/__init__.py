@@ -53,6 +53,7 @@ from .const import (
     SERVICE_CLEAR_SKIP_NEXT_RUN,
     SERVICE_RUN_ZONE,
     SERVICE_SET_FROST_PROTECTION,
+    SERVICE_SET_RAIN_DELAY,
     SERVICE_SET_RUN_WEEKDAYS,
     SERVICE_SKIP_NEXT_RUN,
     SERVICE_SET_ZONE_DURATION,
@@ -170,6 +171,13 @@ SET_FROST_PROTECTION_SCHEMA = vol.Schema(
         vol.Required("entry_id"): cv.string,
         vol.Required("enabled"): cv.boolean,
         vol.Optional("threshold_temp"): vol.Coerce(float),
+    }
+)
+SET_RAIN_DELAY_SCHEMA = vol.Schema(
+    {
+        vol.Required("entry_id"): cv.string,
+        vol.Required("enabled"): cv.boolean,
+        vol.Optional("threshold_mm"): vol.Coerce(float),
     }
 )
 
@@ -383,6 +391,13 @@ def _async_register_services(hass: HomeAssistant) -> None:
             call.data.get("threshold_temp", manager.frost_threshold_temp),
         )
 
+    async def handle_set_rain_delay(call: ServiceCall) -> None:
+        manager = _get_manager(hass, call.data["entry_id"])
+        await manager.async_set_rain_delay(
+            call.data["enabled"],
+            call.data.get("threshold_mm", manager.rain_delay_threshold_mm),
+        )
+
     async def handle_set_rain_pause(call: ServiceCall) -> None:
         manager = _get_manager(hass, call.data["entry_id"])
         await manager.async_set_rain_pause(call.data["days"])
@@ -478,6 +493,12 @@ def _async_register_services(hass: HomeAssistant) -> None:
         SERVICE_SET_FROST_PROTECTION,
         handle_set_frost_protection,
         schema=SET_FROST_PROTECTION_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_RAIN_DELAY,
+        handle_set_rain_delay,
+        schema=SET_RAIN_DELAY_SCHEMA,
     )
     hass.services.async_register(
         DOMAIN, SERVICE_SET_RAIN_PAUSE, handle_set_rain_pause, schema=SET_RAIN_PAUSE_SCHEMA
