@@ -13,6 +13,10 @@ DEFAULT_START_TIME = "05:00:00"
 MIN_START_TIMES = 1
 MAX_START_TIMES = 3
 
+# ISO weekdays (Monday=1 .. Sunday=7) scheduled runs may fire on.
+# The default is every day, i.e. exactly today's behaviour.
+DEFAULT_RUN_WEEKDAYS = [1, 2, 3, 4, 5, 6, 7]
+
 MIN_ZONES = 1
 MAX_ZONES = 10
 
@@ -78,6 +82,7 @@ STATE_PAUSED = "paused"
 STATE_WINTER_MODE = "winter_mode"
 STATE_RAIN_PAUSE = "rain_pause"
 
+SERVICE_SET_RUN_WEEKDAYS = "set_run_weekdays"
 SERVICE_SET_ZONE_ORDER = "set_zone_order"
 SERVICE_SET_ZONE_NAME = "set_zone_name"
 SERVICE_SET_ZONE_DURATION = "set_zone_duration"
@@ -99,6 +104,7 @@ SERVICE_RESUME = "resume"
 ATTR_ZONES = "zones"
 ATTR_PAUSE_BETWEEN_ZONES_SECONDS = "pause_between_zones_seconds"
 ATTR_START_TIMES = "start_times"
+ATTR_RUN_WEEKDAYS = "run_weekdays"
 ATTR_WINTER_MODE = "winter_mode"
 ATTR_RAIN_PAUSE_UNTIL = "rain_pause_until"
 ATTR_CURRENT_ZONE_INDEX = "current_zone_index"

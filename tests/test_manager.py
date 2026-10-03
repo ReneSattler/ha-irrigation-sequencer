@@ -1673,3 +1673,149 @@ async def test_run_zone_service_is_registered(hass: HomeAssistant) -> None:
     await hass.async_block_till_done()
 
     assert hass.services.has_service(DOMAIN, "run_zone")
+
+
+# --------------------------------------------------------------------- #
+# Run weekdays
+# --------------------------------------------------------------------- #
+
+
+async def test_run_weekdays_default_to_every_day(hass: HomeAssistant) -> None:
+    manager = make_manager(hass)
+    assert manager.run_weekdays == [1, 2, 3, 4, 5, 6, 7]
+
+
+async def test_set_run_weekdays_sorts_and_dedupes(
+    hass: HomeAssistant,
+) -> None:
+    manager = make_manager(hass)
+    await manager.async_set_run_weekdays([5, 1, 5, 3])
+    assert manager.run_weekdays == [1, 3, 5]
+
+
+async def test_set_run_weekdays_rejects_empty_and_out_of_range(
+    hass: HomeAssistant,
+) -> None:
+    manager = make_manager(hass)
+    original = list(manager.run_weekdays)
+    with pytest.raises(ServiceValidationError):
+        await manager.async_set_run_weekdays([])
+    with pytest.raises(ServiceValidationError):
+        await manager.async_set_run_weekdays([0, 8])
+    with pytest.raises(ServiceValidationError):
+        await manager.async_set_run_weekdays("not-a-list")
+    assert manager.run_weekdays == original
+
+
+async def test_run_weekdays_persist_across_reload(
+    hass: HomeAssistant,
+) -> None:
+    manager = make_manager(hass)
+    await manager.async_set_run_weekdays([1, 3, 5])
+
+    reloaded = make_manager(hass)
+    await reloaded.async_load()
+    assert reloaded.run_weekdays == [1, 3, 5]
+
+
+async def test_next_run_skips_disabled_weekdays(hass: HomeAssistant) -> None:
+    """With only Wednesday enabled, a Monday noon 'now' must resolve to
+    Wednesday 05:00 - including the week wraparound, not just +1 day."""
+    from datetime import datetime, timezone
+
+    from homeassistant.util import dt as dt_util
+
+    manager = make_manager(hass)
+    await manager.async_set_start_times(["05:00:00"])
+    await manager.async_set_run_weekdays([3])  # Wednesday only
+
+    monday_noon = datetime(2026, 10, 5, 12, 0, tzinfo=timezone.utc)
+    assert monday_noon.isoweekday() == 1
+    with patch.object(dt_util, "now", return_value=monday_noon):
+        assert manager.next_run == "2026-10-07T05:00:00+00:00"
+
+    # And from Saturday it wraps past Sunday to next Wednesday.
+    saturday_noon = datetime(2026, 10, 10, 12, 0, tzinfo=timezone.utc)
+    assert saturday_noon.isoweekday() == 6
+    with patch.object(dt_util, "now", return_value=saturday_noon):
+        assert manager.next_run == "2026-10-14T05:00:00+00:00"
+
+
+async def test_scheduled_trigger_skips_disabled_weekday(
+    hass: HomeAssistant,
+) -> None:
+    """The daily trigger fires every day - the weekday filter decides at
+    fire time. Nothing may start, and nothing may be recorded."""
+    from datetime import datetime, timezone
+
+    manager = make_manager(hass, ["switch.zone_1"])
+    await manager.async_set_run_weekdays([3])  # Wednesday only
+
+    calls = []
+
+    async def fake_set_valve(eid, on):
+        calls.append((eid, on))
+
+    manager._async_set_valve = fake_set_valve
+
+    monday = datetime(2026, 10, 5, 5, 0, tzinfo=timezone.utc)
+    manager._handle_daily_trigger(monday)
+    await hass.async_block_till_done()
+
+    assert manager._run_task is None
+    assert manager.status == "idle"
+    assert calls == []
+
+
+async def test_scheduled_trigger_fires_on_enabled_weekday(
+    hass: HomeAssistant,
+) -> None:
+    from datetime import datetime, timezone
+
+    manager = make_manager(hass, ["switch.zone_1"])
+    await manager.async_set_zone_duration("switch.zone_1", 1)
+    await manager.async_set_run_weekdays([3])  # Wednesday only
+
+    async def fake_set_valve(eid, on):
+        pass
+
+    manager._async_set_valve = fake_set_valve
+
+    wednesday = datetime(2026, 10, 7, 5, 0, tzinfo=timezone.utc)
+    with patch("asyncio.sleep", _instant_sleep):
+        manager._handle_daily_trigger(wednesday)
+        # The trigger schedules the run as its own task - wait for it.
+        for _ in range(1000):
+            if manager._run_task is not None:
+                break
+            await _real_sleep(0)
+        assert manager._run_task is not None
+        await asyncio.wait_for(manager._run_task, timeout=5)
+
+    assert manager.status == "idle"
+    assert len(manager.last_run_zones) == 1
+
+
+async def test_set_run_weekdays_service_is_registered(
+    hass: HomeAssistant,
+) -> None:
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.irrigation_sequencer.const import CONF_ZONE_ENTITIES, DOMAIN
+
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={CONF_ZONE_ENTITIES: ["switch.zone_1"]}
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.services.has_service(DOMAIN, "set_run_weekdays")
+    await hass.services.async_call(
+        DOMAIN,
+        "set_run_weekdays",
+        {"entry_id": entry.entry_id, "weekdays": [1, 5]},
+        blocking=True,
+    )
+    manager = hass.data[DOMAIN][entry.entry_id]
+    assert manager.run_weekdays == [1, 5]
