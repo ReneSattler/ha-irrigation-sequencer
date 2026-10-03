@@ -5,6 +5,13 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.6.1] - 2026-10-03
+
+- Fixed: the resume button used the same `mdi:play` icon as the start
+  button right next to it, so the header looked like it had two start
+  buttons. Resume now uses `mdi:play-pause` (button entity, status card,
+  and the demo icon fallback), which reads as "continue".
+
 ## [1.6.0] - 2026-10-03
 
 - **Pause/resume a running sequence** (fixes

@@ -22,7 +22,7 @@ const DEFAULT_ZONE_DURATION_MINUTES = 10;
 // browser console, whether an update actually took effect versus just
 // looking "the same" as before. Keep this in step with manifest.json's
 // "version" on every release.
-const CARD_VERSION = "1.6.0";
+const CARD_VERSION = "1.6.1";
 // eslint-disable-next-line no-console
 console.info(
   `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
@@ -864,7 +864,7 @@ class IrrigationSequencerStatusCard extends IrrigationSequencerBaseCard {
               <ha-icon icon="mdi:pause"></ha-icon>
             </button>
             <button class="tile-icon-btn primary" id="resume-btn" ${isPaused ? "" : "disabled"} title="${t.resume}">
-              <ha-icon icon="mdi:play"></ha-icon>
+              <ha-icon icon="mdi:play-pause"></ha-icon>
             </button>
             <button class="tile-icon-btn danger" id="stop-btn" ${status === "idle" ? "disabled" : ""} title="${t.stop}">
               <ha-icon icon="mdi:stop"></ha-icon>
