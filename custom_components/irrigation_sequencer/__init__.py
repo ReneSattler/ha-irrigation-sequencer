@@ -53,6 +53,8 @@ from .const import (
     SERVICE_SET_ZONE_DURATION,
     SERVICE_SET_ZONE_NAME,
     SERVICE_SET_ZONE_ORDER,
+    SERVICE_PAUSE,
+    SERVICE_RESUME,
     SERVICE_START_NOW,
     SERVICE_STOP,
     WEATHER_TEMP_SOURCES,
@@ -358,6 +360,14 @@ def _async_register_services(hass: HomeAssistant) -> None:
         manager = _get_manager(hass, call.data["entry_id"])
         await manager.async_stop()
 
+    async def handle_pause(call: ServiceCall) -> None:
+        manager = _get_manager(hass, call.data["entry_id"])
+        await manager.async_pause()
+
+    async def handle_resume(call: ServiceCall) -> None:
+        manager = _get_manager(hass, call.data["entry_id"])
+        await manager.async_resume()
+
     hass.services.async_register(
         DOMAIN, SERVICE_SET_ZONE_ORDER, handle_set_zone_order, schema=SET_ZONE_ORDER_SCHEMA
     )
@@ -410,3 +420,9 @@ def _async_register_services(hass: HomeAssistant) -> None:
         DOMAIN, SERVICE_START_NOW, handle_start_now, schema=ENTRY_ID_ONLY_SCHEMA
     )
     hass.services.async_register(DOMAIN, SERVICE_STOP, handle_stop, schema=ENTRY_ID_ONLY_SCHEMA)
+    hass.services.async_register(
+        DOMAIN, SERVICE_PAUSE, handle_pause, schema=ENTRY_ID_ONLY_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_RESUME, handle_resume, schema=ENTRY_ID_ONLY_SCHEMA
+    )

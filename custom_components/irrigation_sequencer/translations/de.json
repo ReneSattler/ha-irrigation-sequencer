@@ -41,6 +41,7 @@
           "idle": "Bereit",
           "running": "Bewässerung läuft",
           "paused_between_zones": "Pause zwischen Zonen",
+          "paused": "Pausiert",
           "winter_mode": "Wintermodus",
           "rain_pause": "Regen-Pause"
         }
@@ -63,6 +64,12 @@
       },
       "stop": {
         "name": "Stoppen"
+      },
+      "pause": {
+        "name": "Pause"
+      },
+      "resume": {
+        "name": "Fortsetzen"
       }
     }
   },
@@ -114,6 +121,14 @@
     "stop": {
       "name": "Sequenz stoppen",
       "description": "Bricht eine laufende Bewässerungssequenz sofort ab."
+    },
+    "pause": {
+      "name": "Sequenz pausieren",
+      "description": "Hält eine laufende Bewässerungssequenz an: Das offene Ventil wird sofort geschlossen und es wird keine Wasserzeit gezählt, bis fortgesetzt wird."
+    },
+    "resume": {
+      "name": "Sequenz fortsetzen",
+      "description": "Setzt eine pausierte Bewässerungssequenz an der unterbrochenen Stelle fort."
     }
   }
 }

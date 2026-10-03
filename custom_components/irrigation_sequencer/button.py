@@ -18,6 +18,8 @@ async def async_setup_entry(
         [
             IrrigationSequencerStartButton(manager, entry),
             IrrigationSequencerStopButton(manager, entry),
+            IrrigationSequencerPauseButton(manager, entry),
+            IrrigationSequencerResumeButton(manager, entry),
         ]
     )
 
@@ -56,3 +58,25 @@ class IrrigationSequencerStopButton(_BaseButton):
 
     async def async_press(self) -> None:
         await self._manager.async_stop()
+
+
+class IrrigationSequencerPauseButton(_BaseButton):
+    _attr_translation_key = "pause"
+    _attr_icon = "mdi:pause"
+
+    def __init__(self, manager: IrrigationSequencerManager, entry: ConfigEntry) -> None:
+        super().__init__(manager, entry, "pause")
+
+    async def async_press(self) -> None:
+        await self._manager.async_pause()
+
+
+class IrrigationSequencerResumeButton(_BaseButton):
+    _attr_translation_key = "resume"
+    _attr_icon = "mdi:play"
+
+    def __init__(self, manager: IrrigationSequencerManager, entry: ConfigEntry) -> None:
+        super().__init__(manager, entry, "resume")
+
+    async def async_press(self) -> None:
+        await self._manager.async_resume()

@@ -1104,6 +1104,240 @@ async def test_unexpected_activations_persist_across_reload(hass: HomeAssistant)
     assert reloaded.unexpected_zone_activations == manager.unexpected_zone_activations
 
 
+async def test_pause_and_resume_freeze_and_continue_a_zone(
+    hass: HomeAssistant,
+) -> None:
+    """The core promise: pausing closes the valve and freezes every
+    countdown, resuming reopens the valve and continues the same zone.
+    Paused wall time must not leak into any elapsed/remaining number."""
+    manager = make_manager(hass, ["switch.zone_1"])
+    manager.zones[0]["duration_minutes"] = 2  # 120 ticks
+
+    calls = []
+
+    async def fake_set_valve(eid, on):
+        calls.append((eid, on))
+
+    manager._async_set_valve = fake_set_valve
+
+    async def wait_until_running_with_progress() -> None:
+        for _ in range(5000):
+            if manager.status == "running" and manager.seconds_remaining_zone < 120:
+                return
+            await _real_sleep(0)
+        raise AssertionError("zone never started running")
+
+    with patch("asyncio.sleep", _instant_sleep):
+        run = asyncio.create_task(manager._async_run_sequence())
+        await wait_until_running_with_progress()
+
+        await manager.async_pause()
+        assert manager.status == "paused"
+        assert manager._paused is True
+        # The open valve is closed at once, not at the next tick.
+        assert ("switch.zone_1", False) in calls
+
+        frozen_zone = manager.seconds_remaining_zone
+        frozen_total = manager.seconds_remaining_total
+        # Let the held tick loop spin - nothing may move.
+        for _ in range(30):
+            await _real_sleep(0)
+        assert manager.status == "paused"
+        assert manager.seconds_remaining_zone == frozen_zone
+        assert manager.seconds_remaining_total == frozen_total
+
+        await manager.async_resume()
+        assert manager.status == "running"
+        assert manager._paused is False
+        # The same valve is opened again (initial open + reopen).
+        assert calls.count(("switch.zone_1", True)) == 2
+
+        await asyncio.wait_for(run, timeout=5)
+
+    assert manager.status == "idle"
+    # The full 120 water seconds ran - the paused hold added none.
+    assert manager.last_run_zones[0]["actual_elapsed_seconds"] == 120
+
+
+async def test_pause_during_pause_between_zones_freezes_the_pause(
+    hass: HomeAssistant,
+) -> None:
+    """Pausing while no valve is open holds the pause countdown itself."""
+    manager = make_manager(hass, ["switch.zone_1", "switch.zone_2"])
+    manager.zones[0]["duration_minutes"] = 1
+    manager.zones[1]["duration_minutes"] = 1
+    manager.pause_between_zones_seconds = 300
+
+    async def fake_set_valve(eid, on):
+        pass
+
+    manager._async_set_valve = fake_set_valve
+
+    with patch("asyncio.sleep", _instant_sleep):
+        run = asyncio.create_task(manager._async_run_sequence())
+        for _ in range(10000):
+            if manager.status == "paused_between_zones":
+                break
+            await _real_sleep(0)
+        assert manager.status == "paused_between_zones"
+
+        await manager.async_pause()
+        assert manager.status == "paused"
+        frozen_total = manager.seconds_remaining_total
+        for _ in range(30):
+            await _real_sleep(0)
+        assert manager.seconds_remaining_total == frozen_total
+
+        await manager.async_resume()
+        assert manager.status == "paused_between_zones"
+        await asyncio.wait_for(run, timeout=5)
+
+    assert manager.status == "idle"
+    assert [z["entity_id"] for z in manager.last_run_zones] == [
+        "switch.zone_1",
+        "switch.zone_2",
+    ]
+
+
+async def test_stop_from_paused_aborts_the_run(hass: HomeAssistant) -> None:
+    """Stop is the way out of a hold - it aborts rather than resuming."""
+    manager = make_manager(hass, ["switch.zone_1"])
+    manager.zones[0]["duration_minutes"] = 2
+
+    async def fake_set_valve(eid, on):
+        pass
+
+    manager._async_set_valve = fake_set_valve
+
+    with patch("asyncio.sleep", _instant_sleep):
+        run = asyncio.create_task(manager._async_run_sequence())
+        for _ in range(5000):
+            if manager.status == "running" and manager.seconds_remaining_zone < 120:
+                break
+            await _real_sleep(0)
+        await manager.async_pause()
+        assert manager.status == "paused"
+
+        manager._run_task = run
+        await manager.async_stop()
+        await asyncio.wait_for(run, timeout=5)
+
+    assert manager.status == "idle"
+    assert manager._paused is False
+
+
+async def test_pause_without_a_run_and_resume_without_a_pause_are_noops(
+    hass: HomeAssistant,
+) -> None:
+    """Both requests warn and change nothing when there is nothing to
+    hold or continue - in particular they must never open a valve."""
+    manager = make_manager(hass, ["switch.zone_1"])
+
+    calls = []
+
+    async def fake_set_valve(eid, on):
+        calls.append((eid, on))
+
+    manager._async_set_valve = fake_set_valve
+
+    await manager.async_pause()
+    assert manager.status == "idle"
+    assert manager._paused is False
+
+    await manager.async_resume()
+    assert manager.status == "idle"
+
+    assert calls == []
+
+
+async def test_start_is_rejected_while_paused(hass: HomeAssistant) -> None:
+    """A paused run still owns the valves - a second start (manual or
+    scheduled) must not stack another sequence on top of it."""
+    manager = make_manager(hass, ["switch.zone_1"])
+    manager.zones[0]["duration_minutes"] = 2
+
+    async def fake_set_valve(eid, on):
+        pass
+
+    manager._async_set_valve = fake_set_valve
+
+    with patch("asyncio.sleep", _instant_sleep):
+        await manager.async_start_now()
+        assert manager._run_task is not None
+        for _ in range(5000):
+            if manager.status == "running" and manager.seconds_remaining_zone < 120:
+                break
+            await _real_sleep(0)
+        await manager.async_pause()
+
+        first_task = manager._run_task
+        await manager.async_start_now()
+        # Rejected: same task still held, status untouched.
+        assert manager._run_task is first_task
+        assert manager.status == "paused"
+
+        await manager.async_resume()
+        await manager.async_stop()
+
+    assert manager.status == "idle"
+
+
+async def test_pause_and_resume_services_drive_the_manager(
+    hass: HomeAssistant,
+) -> None:
+    """The full path a card button press or an automation takes: services
+    registered by entry setup, reaching async_pause/async_resume, with the
+    pause/resume button entities present."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.irrigation_sequencer.const import CONF_ZONE_ENTITIES, DOMAIN
+
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={CONF_ZONE_ENTITIES: ["switch.zone_1"]}
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    manager = hass.data[DOMAIN][entry.entry_id]
+    manager.zones[0]["duration_minutes"] = 2
+
+    async def fake_set_valve(eid, on):
+        pass
+
+    manager._async_set_valve = fake_set_valve
+
+    button_ids = [state.entity_id for state in hass.states.async_all("button")]
+    assert any(entity_id.endswith("_pause") for entity_id in button_ids)
+    assert any(entity_id.endswith("_resume") for entity_id in button_ids)
+    assert hass.services.has_service(DOMAIN, "pause")
+    assert hass.services.has_service(DOMAIN, "resume")
+
+    with patch("asyncio.sleep", _instant_sleep):
+        await hass.services.async_call(
+            DOMAIN, "start_now", {"entry_id": entry.entry_id}, blocking=True
+        )
+        for _ in range(5000):
+            if manager.status == "running" and manager.seconds_remaining_zone < 120:
+                break
+            await _real_sleep(0)
+
+        await hass.services.async_call(
+            DOMAIN, "pause", {"entry_id": entry.entry_id}, blocking=True
+        )
+        assert manager.status == "paused"
+        await hass.services.async_call(
+            DOMAIN, "resume", {"entry_id": entry.entry_id}, blocking=True
+        )
+        assert manager.status == "running"
+
+        await hass.services.async_call(
+            DOMAIN, "stop", {"entry_id": entry.entry_id}, blocking=True
+        )
+
+    assert manager.status == "idle"
+
+
 async def test_zone_already_on_at_startup_is_flagged(hass: HomeAssistant) -> None:
     """A power cut that flips a relay on usually takes Home Assistant down
     too, so the state change happens with nothing listening - checking once

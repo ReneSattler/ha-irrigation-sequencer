@@ -22,7 +22,7 @@ const DEFAULT_ZONE_DURATION_MINUTES = 10;
 // browser console, whether an update actually took effect versus just
 // looking "the same" as before. Keep this in step with manifest.json's
 // "version" on every release.
-const CARD_VERSION = "1.5.10";
+const CARD_VERSION = "1.6.0";
 // eslint-disable-next-line no-console
 console.info(
   `%c IRRIGATION-SEQUENCER-CARD %c v${CARD_VERSION} `,
@@ -36,6 +36,7 @@ const TRANSLATIONS = {
       idle: "Idle",
       running: "Irrigating",
       paused_between_zones: "Pause between zones",
+      paused: "Paused",
       winter_mode: "Winter mode active",
       rain_pause: "Rain pause active",
     },
@@ -66,6 +67,8 @@ const TRANSLATIONS = {
     currentTemp: "Current temperature",
     start: "Start now",
     stop: "Stop",
+    pause: "Pause",
+    resume: "Resume",
     nextRun: "Next run",
     totalDuration: "Total duration",
     totalRemaining: "Total remaining",
@@ -97,6 +100,7 @@ const TRANSLATIONS = {
       idle: "Bereit",
       running: "Bewässerung läuft",
       paused_between_zones: "Pause zwischen Zonen",
+      paused: "Pausiert",
       winter_mode: "Wintermodus aktiv",
       rain_pause: "Regen-Pause aktiv",
     },
@@ -127,6 +131,8 @@ const TRANSLATIONS = {
     currentTemp: "Aktuelle Temperatur",
     start: "Jetzt starten",
     stop: "Stoppen",
+    pause: "Pause",
+    resume: "Fortsetzen",
     nextRun: "Nächster Lauf",
     totalDuration: "Gesamtdauer",
     totalRemaining: "Gesamt verbleibend",
@@ -178,6 +184,7 @@ const STATUS_COLORS = {
   idle: "var(--disabled-text-color, #9e9e9e)",
   running: "var(--success-color, #4caf50)",
   paused_between_zones: "var(--warning-color, #ff9800)",
+  paused: "var(--warning-color, #ff9800)",
   winter_mode: "var(--info-color, #03a9f4)",
   rain_pause: "var(--info-color, #03a9f4)",
 };
@@ -730,7 +737,12 @@ class IrrigationSequencerStatusCard extends IrrigationSequencerBaseCard {
     const title = this._config.title || t.statusCardTitle;
     const statusColor = STATUS_COLORS[status] || STATUS_COLORS.idle;
     const isRunning = status === "running";
-    const isBusy = status === "running" || status === "paused_between_zones";
+    const isBusy =
+      status === "running" ||
+      status === "paused_between_zones" ||
+      status === "paused";
+    const isPaused = status === "paused";
+    const canPause = status === "running" || status === "paused_between_zones";
     const layout = this._config.layout === "horizontal" ? "horizontal" : "vertical";
 
     const activeZone = attrs.current_zone_index != null ? zones[attrs.current_zone_index] : null;
@@ -754,13 +766,13 @@ class IrrigationSequencerStatusCard extends IrrigationSequencerBaseCard {
                 <ha-icon icon="mdi:sprinkler-variant"></ha-icon>
                 <div>
                   <div class="stat-value">${activeZone ? zoneDisplayName(this._hass, activeZone) : t.pauseBetweenZones}</div>
-                  <div class="stat-label">${
+                  <div class="stat-label">${(isPaused ? `⏸ ${t.status.paused} · ` : "") + (
                     activeZone
                       ? t.remainingZone(formatSeconds(attrs.seconds_remaining_zone))
                       : nextZone
                         ? `${t.upNext}: ${zoneDisplayName(this._hass, nextZone)}`
                         : t.remainingTotal(formatSeconds(remaining))
-                  }</div>
+                  )}</div>
                 </div>
               </div>`
             : `<div class="stat" style="--tile-color: var(--info-color, #03a9f4)">
@@ -828,6 +840,12 @@ class IrrigationSequencerStatusCard extends IrrigationSequencerBaseCard {
             <div class="tile-secondary">${t.status[status] || status}</div>
           </div>
           <div class="tile-actions">
+            <button class="tile-icon-btn" id="pause-btn" ${canPause ? "" : "disabled"} title="${t.pause}">
+              <ha-icon icon="mdi:pause"></ha-icon>
+            </button>
+            <button class="tile-icon-btn primary" id="resume-btn" ${isPaused ? "" : "disabled"} title="${t.resume}">
+              <ha-icon icon="mdi:play"></ha-icon>
+            </button>
             <button class="tile-icon-btn danger" id="stop-btn" ${status === "idle" ? "disabled" : ""} title="${t.stop}">
               <ha-icon icon="mdi:stop"></ha-icon>
             </button>
@@ -842,6 +860,8 @@ class IrrigationSequencerStatusCard extends IrrigationSequencerBaseCard {
 
     this.shadowRoot.getElementById("start-btn")?.addEventListener("click", () => this._callService("start_now"));
     this.shadowRoot.getElementById("stop-btn")?.addEventListener("click", () => this._callService("stop"));
+    this.shadowRoot.getElementById("pause-btn")?.addEventListener("click", () => this._callService("pause"));
+    this.shadowRoot.getElementById("resume-btn")?.addEventListener("click", () => this._callService("resume"));
   }
 }
 

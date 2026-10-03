@@ -5,6 +5,21 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.6.0] - 2026-10-03
+
+- **Pause/resume a running sequence** (fixes
+  [#73](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/73)):
+  pausing closes the open valve immediately and freezes every countdown -
+  no water time is counted while paused - and resuming reopens the valve
+  and continues the same zone (or the pause between zones) where it left
+  off. New `irrigation_sequencer.pause` / `.resume` services, new Pause /
+  Resume button entities, and pause/resume buttons on the status card next
+  to start/stop, with a new `paused` sensor state ("Pausiert" on German
+  instances). Stopping from a paused state aborts the run as usual, and a
+  second start (manual or scheduled) is rejected while paused. Pause is
+  deliberately not persisted: a restart always fails safe back to idle
+  with all valves closed.
+
 ## [1.4.3] - 2026-07-31
 
 - Fixed: during the pause between zones, the busy tile repeated the exact
