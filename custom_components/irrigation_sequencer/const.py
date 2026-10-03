@@ -119,6 +119,7 @@ ATTR_RUN_WEEKDAYS = "run_weekdays"
 ATTR_SKIP_NEXT_RUN = "skip_next_run"
 ATTR_FROST_PROTECTION_ENABLED = "frost_protection_enabled"
 ATTR_FROST_THRESHOLD_TEMP = "frost_threshold_temp"
+ATTR_RUN_HISTORY = "run_history"
 ATTR_WINTER_MODE = "winter_mode"
 ATTR_RAIN_PAUSE_UNTIL = "rain_pause_until"
 ATTR_CURRENT_ZONE_INDEX = "current_zone_index"
@@ -202,6 +203,9 @@ UNEXPECTED_SOURCE_STARTUP = "already_on_at_startup"
 # Cap on the retained activation history, so a device stuck in a loop
 # can't grow the attribute (and the stored state file) without bound.
 MAX_UNEXPECTED_ACTIVATIONS_KEPT = 20
+
+# Cap on the retained run history - one entry per finished run.
+MAX_RUN_HISTORY_KEPT = 30
 # Per-entity quiet period for *reporting* an activation - the record, the
 # log line and the notification. Closing the valve is deliberately not
 # throttled: it is cheap, idempotent, and throttling it once meant a zone

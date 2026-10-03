@@ -78,6 +78,9 @@ const TRANSLATIONS = {
     skipNextRun: "Skip next run",
     skipNextRunUndo: "Next run skipped · undo",
     nextRunSkipped: "Next run skipped",
+    recentRuns: "Recent runs",
+    runHistoryTest: "test",
+    runHistoryStopped: "stopped",
     nextRun: "Next run",
     totalDuration: "Total duration",
     totalRemaining: "Total remaining",
@@ -151,6 +154,9 @@ const TRANSLATIONS = {
     skipNextRun: "Nächsten Lauf überspringen",
     skipNextRunUndo: "Nächster Lauf übersprungen · zurücknehmen",
     nextRunSkipped: "Nächster Lauf übersprungen",
+    recentRuns: "Letzte Läufe",
+    runHistoryTest: "Test",
+    runHistoryStopped: "abgebrochen",
     nextRun: "Nächster Lauf",
     totalDuration: "Gesamtdauer",
     totalRemaining: "Gesamt verbleibend",
@@ -607,6 +613,37 @@ class IrrigationSequencerBaseCard extends HTMLElement {
     `;
   }
 
+  /** Compact list of the most recent runs (newest first). Pure display:
+   * the full history lives in the sensor's run_history attribute. */
+  _renderHistory(attrs, t) {
+    const history = [...(attrs.run_history || [])].reverse().slice(0, 5);
+    if (!history.length) return "";
+    const rows = history
+      .map((entry) => {
+        const when = new Date(entry.started_at).toLocaleString(resolveLanguage(this._hass), {
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        const minutes = Math.max(1, Math.round((entry.watered_seconds || 0) / 60));
+        const note =
+          entry.trigger === "test"
+            ? t.runHistoryTest
+            : entry.stopped_early
+              ? t.runHistoryStopped
+              : `×${Number(entry.factor ?? 1).toFixed(2)}`;
+        return `<div class="history-row"><span>${when}</span><span>${minutes} min · ${note}</span></div>`;
+      })
+      .join("");
+    return `
+      <div class="history-block">
+        <div class="history-title">${t.recentRuns}</div>
+        ${rows}
+      </div>
+    `;
+  }
+
   _renderForecastStat(attrs, t) {
     if (!attrs.weather_adjustment_enabled || !attrs.weather_entity) return "";
     // Prefer the value the integration itself resolved - that is the one the
@@ -722,6 +759,11 @@ class IrrigationSequencerBaseCard extends HTMLElement {
       .stat ha-icon { color: var(--tile-color, var(--primary-color)); flex-shrink: 0; }
       .stat-value { font-size: 0.92em; font-weight: 600; color: var(--primary-text-color); overflow-wrap: break-word; word-break: break-word; }
       .stat-label { font-size: 0.72em; color: var(--secondary-text-color); overflow-wrap: break-word; word-break: break-word; }
+      .history-block { margin-top: 10px; padding: 8px 10px; border-radius: 12px;
+        background: var(--secondary-background-color, rgba(127,127,127,0.08)); }
+      .history-title { font-size: 0.72em; color: var(--secondary-text-color); margin-bottom: 4px; }
+      .history-row { display: flex; justify-content: space-between; gap: 8px; font-size: 0.8em;
+        color: var(--primary-text-color); padding: 2px 0; }
 
       /* Layout: horizontal arranges content side-by-side for wide/short cards */
       .layout-horizontal .status-columns { display: flex; gap: 16px; align-items: flex-start; }
@@ -856,6 +898,7 @@ class IrrigationSequencerStatusCard extends IrrigationSequencerBaseCard {
         }
         ${this._renderForecastStat(attrs, t)}
       </div>
+      ${this._renderHistory(attrs, t)}
     `;
 
     const timelineCol = `
