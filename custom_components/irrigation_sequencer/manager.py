@@ -102,6 +102,10 @@ class IrrigationSequencerManager:
         self.pause_between_zones_seconds: int = DEFAULT_PAUSE_SECONDS
         self.start_times: list[str] = [DEFAULT_START_TIME]
         self.run_weekdays: list[int] = list(DEFAULT_RUN_WEEKDAYS)
+        # One-shot skip of the upcoming scheduled run. Persisted so an
+        # evening "skip tomorrow morning" survives a night restart; a
+        # manual start ignores it and leaves it set.
+        self.skip_next_run: bool = False
         self.winter_mode: bool = False
         self.rain_pause_until: str | None = None
         # Notify service name (e.g. "mobile_app_my_phone", the part after
@@ -245,6 +249,7 @@ class IrrigationSequencerManager:
             validated_weekdays = self._coerce_weekdays(data.get("run_weekdays"))
             if validated_weekdays is not None:
                 self.run_weekdays = validated_weekdays
+            self.skip_next_run = bool(data.get("skip_next_run", False))
             self.winter_mode = data.get("winter_mode", False)
             self.rain_pause_until = data.get("rain_pause_until")
             self.notify_target = data.get("notify_target")
@@ -311,6 +316,7 @@ class IrrigationSequencerManager:
                 "pause_between_zones_seconds": self.pause_between_zones_seconds,
                 "start_times": self.start_times,
                 "run_weekdays": self.run_weekdays,
+                "skip_next_run": self.skip_next_run,
                 "winter_mode": self.winter_mode,
                 "rain_pause_until": self.rain_pause_until,
                 "notify_target": self.notify_target,
@@ -1237,7 +1243,33 @@ class IrrigationSequencerManager:
                 if candidate <= now:
                     continue
                 candidates.append(candidate)
+        candidates.sort()
+        # A one-shot skip eats the upcoming run, so the display jumps to
+        # the one after it. The window always holds several hits (daily
+        # triggers over 8 days), so dropping the first never empties it.
+        if self.skip_next_run and candidates:
+            candidates = candidates[1:]
         return min(candidates).isoformat() if candidates else None
+
+    async def async_skip_next_run(self) -> None:
+        """Skip the upcoming scheduled run once, then forget about it."""
+        if self._sequence_active:
+            _LOGGER.warning(
+                "Irrigation sequence is already running, ignoring skip request"
+            )
+            return
+        if self.skip_next_run:
+            _LOGGER.warning("Next run is already skipped, ignoring skip request")
+            return
+        self.skip_next_run = True
+        await self._async_save()
+        _LOGGER.info("Next scheduled irrigation run will be skipped")
+        self._notify_listeners()
+
+    async def async_clear_skip_next_run(self) -> None:
+        self.skip_next_run = False
+        await self._async_save()
+        self._notify_listeners()
 
     # ------------------------------------------------------------------ #
     # Running the sequence
@@ -1252,6 +1284,14 @@ class IrrigationSequencerManager:
             blocked, reason = self._is_blocked()
             if blocked:
                 self.status = reason or STATE_IDLE
+                self._notify_listeners()
+                return
+            # A block (winter/rain) keeps the flag: the run wouldn't have
+            # happened anyway, so the skip stays armed for the next one.
+            if self.skip_next_run:
+                self.skip_next_run = False
+                await self._async_save()
+                _LOGGER.info("Skipping scheduled irrigation run (one-shot skip used up)")
                 self._notify_listeners()
                 return
 

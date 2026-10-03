@@ -50,8 +50,10 @@ from .const import (
     SERVICE_SET_NOTIFY_TARGET,
     SERVICE_SET_WEATHER_ADJUSTMENT,
     SERVICE_SET_WINTER_MODE,
+    SERVICE_CLEAR_SKIP_NEXT_RUN,
     SERVICE_RUN_ZONE,
     SERVICE_SET_RUN_WEEKDAYS,
+    SERVICE_SKIP_NEXT_RUN,
     SERVICE_SET_ZONE_DURATION,
     SERVICE_SET_ZONE_ENABLED,
     SERVICE_SET_ZONE_NAME,
@@ -358,6 +360,14 @@ def _async_register_services(hass: HomeAssistant) -> None:
         manager = _get_manager(hass, call.data["entry_id"])
         await manager.async_set_run_weekdays(call.data["weekdays"])
 
+    async def handle_skip_next_run(call: ServiceCall) -> None:
+        manager = _get_manager(hass, call.data["entry_id"])
+        await manager.async_skip_next_run()
+
+    async def handle_clear_skip_next_run(call: ServiceCall) -> None:
+        manager = _get_manager(hass, call.data["entry_id"])
+        await manager.async_clear_skip_next_run()
+
     async def handle_set_rain_pause(call: ServiceCall) -> None:
         manager = _get_manager(hass, call.data["entry_id"])
         await manager.async_set_rain_pause(call.data["days"])
@@ -438,6 +448,15 @@ def _async_register_services(hass: HomeAssistant) -> None:
         SERVICE_SET_RUN_WEEKDAYS,
         handle_set_run_weekdays,
         schema=SET_RUN_WEEKDAYS_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_SKIP_NEXT_RUN, handle_skip_next_run, schema=ENTRY_ID_ONLY_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_CLEAR_SKIP_NEXT_RUN,
+        handle_clear_skip_next_run,
+        schema=ENTRY_ID_ONLY_SCHEMA,
     )
     hass.services.async_register(
         DOMAIN, SERVICE_SET_RAIN_PAUSE, handle_set_rain_pause, schema=SET_RAIN_PAUSE_SCHEMA

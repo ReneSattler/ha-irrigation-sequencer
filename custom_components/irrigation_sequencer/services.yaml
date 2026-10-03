@@ -118,6 +118,24 @@ set_run_weekdays:
       selector:
         object:
 
+skip_next_run:
+  name: Skip next run
+  description: Skips the upcoming scheduled run once, then forgets about it. Manual starts still work.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+
+clear_skip_next_run:
+  name: Clear skipped run
+  description: Takes back a pending one-shot skip so the next scheduled run happens again.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+
 set_rain_pause:
   name: Set rain pause
   description: Pauses irrigation for 1-24 days (e.g. after rainfall).

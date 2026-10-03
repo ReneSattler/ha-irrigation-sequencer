@@ -70,6 +70,9 @@
       },
       "resume": {
         "name": "Fortsetzen"
+      },
+      "skip_next_run": {
+        "name": "Nächsten Lauf überspringen"
       }
     }
   },
@@ -97,6 +100,14 @@
     "set_run_weekdays": {
       "name": "Lauftage setzen",
       "description": "Beschränkt geplante Läufe auf ausgewählte Wochentage (ISO: Montag=1 .. Sonntag=7). Manuelle Starts gehen immer. Standard ist jeder Tag."
+    },
+    "skip_next_run": {
+      "name": "Nächsten Lauf überspringen",
+      "description": "Überspringt den nächsten geplanten Lauf einmal und vergisst es danach wieder. Manuelle Starts funktionieren trotzdem."
+    },
+    "clear_skip_next_run": {
+      "name": "Überspringen zurücknehmen",
+      "description": "Nimmt ein vorgemerktes einmaliges Überspringen zurück, sodass der nächste geplante Lauf wieder stattfindet."
     },
     "set_rain_pause": {
       "name": "Regen-Pause setzen",
