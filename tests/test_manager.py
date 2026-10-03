@@ -2116,3 +2116,147 @@ async def test_frost_service_and_switch_are_registered(
     manager = hass.data[DOMAIN][entry.entry_id]
     assert manager.frost_protection_enabled is True
     assert manager.frost_threshold_temp == 1.5
+
+
+# --------------------------------------------------------------------- #
+# Run history
+# --------------------------------------------------------------------- #
+
+
+async def test_completed_run_appends_history_entry(
+    hass: HomeAssistant,
+) -> None:
+    """One finished run, one entry - with everything needed to answer
+    'did it water, and for how long' a week later."""
+    manager = make_manager(hass, ["switch.zone_1", "switch.zone_2"])
+    await manager.async_set_zone_duration("switch.zone_1", 1)
+    await manager.async_set_zone_duration("switch.zone_2", 1)
+    manager.pause_between_zones_seconds = 0
+
+    async def fake_set_valve(eid, on):
+        pass
+
+    manager._async_set_valve = fake_set_valve
+
+    with patch("asyncio.sleep", _instant_sleep):
+        await asyncio.wait_for(manager._async_run_sequence(), timeout=5)
+
+    assert len(manager.run_history) == 1
+    entry = manager.run_history[0]
+    assert entry["trigger"] == "manual"
+    assert entry["zones"] == 2
+    assert entry["watered_seconds"] == 120
+    assert entry["stopped_early"] is False
+    assert entry["factor"] == 1.0
+    assert "started_at" in entry
+
+
+async def test_scheduled_run_is_marked_as_schedule(
+    hass: HomeAssistant,
+) -> None:
+    manager = make_manager(hass, ["switch.zone_1"])
+    await manager.async_set_zone_duration("switch.zone_1", 1)
+
+    async def fake_set_valve(eid, on):
+        pass
+
+    manager._async_set_valve = fake_set_valve
+
+    with patch("asyncio.sleep", _instant_sleep):
+        await manager.async_start_now(triggered_by_schedule=True)
+        assert manager._run_task is not None
+        await asyncio.wait_for(manager._run_task, timeout=5)
+
+    assert manager.run_history[0]["trigger"] == "schedule"
+
+
+async def test_stopped_and_test_runs_are_recorded_as_such(
+    hass: HomeAssistant,
+) -> None:
+    manager = make_manager(hass, ["switch.zone_1"])
+    await manager.async_set_zone_duration("switch.zone_1", 2)
+
+    async def fake_set_valve(eid, on):
+        pass
+
+    manager._async_set_valve = fake_set_valve
+
+    with patch("asyncio.sleep", _instant_sleep):
+        run = asyncio.create_task(manager._async_run_sequence())
+        for _ in range(5000):
+            if manager.status == "running" and manager.seconds_remaining_zone < 120:
+                break
+            await _real_sleep(0)
+        manager._run_task = run
+        await manager.async_stop()
+        await asyncio.wait_for(run, timeout=5)
+
+    assert manager.run_history[0]["stopped_early"] is True
+    assert manager.run_history[0]["watered_seconds"] < 120
+
+    with patch("asyncio.sleep", _instant_sleep):
+        await manager.async_run_zone("switch.zone_1", minutes=1)
+        await asyncio.wait_for(manager._run_task, timeout=5)
+
+    assert len(manager.run_history) == 2
+    assert manager.run_history[1]["trigger"] == "test"
+
+
+async def test_history_is_capped_and_persists(hass: HomeAssistant) -> None:
+    """Prefilled to the cap, one more run must drop the oldest - and the
+    result must survive a restart like last_run_zones does."""
+    from custom_components.irrigation_sequencer.const import MAX_RUN_HISTORY_KEPT
+
+    manager = make_manager(hass, ["switch.zone_1"])
+    await manager.async_set_zone_duration("switch.zone_1", 1)
+    manager.run_history = [
+        {
+            "started_at": f"2026-09-{day:02d}T05:00:00+00:00",
+            "trigger": "schedule",
+            "zones": 1,
+            "watered_seconds": 60,
+            "factor": 1.0,
+            "stopped_early": False,
+        }
+        for day in range(1, MAX_RUN_HISTORY_KEPT + 1)
+    ]
+
+    async def fake_set_valve(eid, on):
+        pass
+
+    manager._async_set_valve = fake_set_valve
+
+    with patch("asyncio.sleep", _instant_sleep):
+        await asyncio.wait_for(manager._async_run_sequence(), timeout=5)
+
+    assert len(manager.run_history) == MAX_RUN_HISTORY_KEPT
+    assert all(
+        entry["started_at"] != "2026-09-01T05:00:00+00:00"
+        for entry in manager.run_history
+    )
+
+    reloaded = make_manager(hass, ["switch.zone_1"])
+    await reloaded.async_load()
+    assert reloaded.run_history == manager.run_history
+
+
+async def test_run_history_exposed_on_sensor(hass: HomeAssistant) -> None:
+    """Templates and automations read the history off the status sensor,
+    so the attribute has to be there after a plain entry setup."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.irrigation_sequencer.const import CONF_ZONE_ENTITIES, DOMAIN
+
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={CONF_ZONE_ENTITIES: ["switch.zone_1"]}
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    sensor = next(
+        state
+        for state in hass.states.async_all("sensor")
+        if state.attributes.get("entry_id") == entry.entry_id
+    )
+    assert sensor.attributes["run_history"] == []

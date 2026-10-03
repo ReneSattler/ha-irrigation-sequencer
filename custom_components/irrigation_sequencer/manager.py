@@ -53,6 +53,7 @@ from .const import (
     AUTO_OFF_VERIFY_SECONDS,
     MAX_AUTO_OFF_ATTEMPTS,
     MAX_FROST_THRESHOLD_TEMP,
+    MAX_RUN_HISTORY_KEPT,
     MIN_FROST_THRESHOLD_TEMP,
     UNEXPECTED_ACTIVATION_MESSAGES_BY_LANGUAGE,
     UNEXPECTED_ACTIVATION_REPORT_COOLDOWN_SECONDS,
@@ -113,6 +114,8 @@ class IrrigationSequencerManager:
         self.skip_next_run: bool = False
         self.frost_protection_enabled: bool = DEFAULT_FROST_PROTECTION_ENABLED
         self.frost_threshold_temp: float = DEFAULT_FROST_THRESHOLD_TEMP
+        # One entry per finished run, newest last (see _record_run_history).
+        self.run_history: list[dict[str, Any]] = []
         self.winter_mode: bool = False
         self.rain_pause_until: str | None = None
         # Notify service name (e.g. "mobile_app_my_phone", the part after
@@ -289,6 +292,7 @@ class IrrigationSequencerManager:
             # finishing and someone actually checking the attribute.
             self.last_run_zones = data.get("last_run_zones", [])
             self.unexpected_zone_activations = data.get("unexpected_zone_activations", [])
+            self.run_history = data.get("run_history", [])[-MAX_RUN_HISTORY_KEPT:]
             self.auto_off_unexpected_enabled = data.get(
                 "auto_off_unexpected_enabled", DEFAULT_AUTO_OFF_UNEXPECTED
             )
@@ -335,6 +339,7 @@ class IrrigationSequencerManager:
                 "start_times": self.start_times,
                 "run_weekdays": self.run_weekdays,
                 "skip_next_run": self.skip_next_run,
+                "run_history": self.run_history,
                 "frost_protection_enabled": self.frost_protection_enabled,
                 "frost_threshold_temp": self.frost_threshold_temp,
                 "winter_mode": self.winter_mode,
@@ -1354,7 +1359,11 @@ class IrrigationSequencerManager:
             return
 
         self._stop_requested = False
-        self._run_task = self.hass.async_create_task(self._async_run_sequence())
+        self._run_task = self.hass.async_create_task(
+            self._async_run_sequence(
+                "schedule" if triggered_by_schedule else "manual"
+            )
+        )
 
     async def async_stop(self) -> None:
         self._stop_requested = True
@@ -1396,6 +1405,7 @@ class IrrigationSequencerManager:
         # Same ownership contract as the full sequence: while this runs,
         # the watchdog treats the valve as ours, and pause/stop work.
         self._sequence_running = True
+        started_at = dt_util.now().isoformat()
         full_index = self._full_index_of(entity_id)
         self.current_zone_index = full_index
         self.last_zone_index = full_index
@@ -1460,6 +1470,7 @@ class IrrigationSequencerManager:
             )
             await self._async_save()
         finally:
+            stopped_early = self._stop_requested
             for zone in self.zones:
                 await self._async_set_valve(zone["entity_id"], False)
             self._sequence_running = False
@@ -1474,6 +1485,15 @@ class IrrigationSequencerManager:
             self._pause_valve_entity_id = None
             self._active_valve_entity_id = None
             self._pause_started_monotonic = None
+            self._record_run_history(
+                trigger="test",
+                started_at=started_at,
+                zones=1,
+                watered_seconds=zone_elapsed,
+                factor=1.0,
+                stopped_early=stopped_early,
+            )
+            await self._async_save()
             self._notify_listeners()
 
     async def async_pause(self) -> None:
@@ -1594,12 +1614,41 @@ class IrrigationSequencerManager:
         )
         return head_seconds + rest + pauses
 
-    async def _async_run_sequence(self) -> None:
+    def _record_run_history(
+        self,
+        *,
+        trigger: str,
+        started_at: str,
+        zones: int,
+        watered_seconds: int,
+        factor: float,
+        stopped_early: bool,
+    ) -> None:
+        """Append one entry per finished run - completed, stopped or test -
+        so "did it water last Tuesday" stays answerable. Capped, so this
+        can never grow the attribute or the state file without bound."""
+        self.run_history = (
+            self.run_history
+            + [
+                {
+                    "started_at": started_at,
+                    "trigger": trigger,
+                    "zones": zones,
+                    "watered_seconds": watered_seconds,
+                    "factor": round(factor, 2),
+                    "stopped_early": stopped_early,
+                }
+            ]
+        )[-MAX_RUN_HISTORY_KEPT:]
+
+    async def _async_run_sequence(self, trigger: str = "manual") -> None:
         # Claim the valves before anything else, so the zone watchdog knows
         # every switch-on from here until the finally block is ours.
         self._sequence_running = True
         # Never scale the run off a stale forecast.
         await self.async_refresh_forecast()
+        started_at = dt_util.now().isoformat()
+        factor_at_run_start = self.weather_current_factor
         # Snapshot the order so the iteration stays stable, but always look
         # durations up by entity id - self.zones is replaced wholesale on
         # every change. Only enabled zones run; current/last_zone_index
@@ -1748,6 +1797,8 @@ class IrrigationSequencerManager:
                         )
                         self._notify_listeners()
         finally:
+            # Read before the resets below clear it.
+            stopped_early = self._stop_requested
             for zone in self.zones:
                 await self._async_set_valve(zone["entity_id"], False)
             # Everything is closed; from here on a zone going on again is
@@ -1766,6 +1817,15 @@ class IrrigationSequencerManager:
             self._pause_valve_entity_id = None
             self._active_valve_entity_id = None
             self._pause_started_monotonic = None
+            self._record_run_history(
+                trigger=trigger,
+                started_at=started_at,
+                zones=len(planned),
+                watered_seconds=run_elapsed,
+                factor=factor_at_run_start,
+                stopped_early=stopped_early,
+            )
+            await self._async_save()
             self._notify_listeners()
             # Count the seconds actually spent running rather than deriving
             # them from a planned total - the plan can change mid-run now.
