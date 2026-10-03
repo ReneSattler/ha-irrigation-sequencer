@@ -5,6 +5,20 @@ All notable changes to this project are documented here. Versioning follows
 `custom_components/irrigation_sequencer/manifest.json` and tagged as a
 GitHub release (`vX.Y.Z`) once pushed.
 
+## [1.10.0] - 2026-10-03
+
+- **Automatic rain delay** (fixes
+  [#78](https://github.com/ReneSattler/ha-irrigation-sequencer/issues/78)):
+  strictly opt-in (default off) block of scheduled runs when the daily
+  forecast expects at least a threshold amount of rain for today
+  (default 2 mm, 0.5..20 mm range). The expected amount is cached from
+  the same daily fetch as the forecast high and refreshed on the same
+  timer plus before every run. Distinct `rain_delay` status, `next_run`
+  stays empty while blocking, manual starts still work, and missing
+  entity/forecast/precipitation data never blocks (fail open). New
+  `irrigation_sequencer.set_rain_delay` service, a rain-delay switch
+  entity, and a settings-card switch plus threshold input.
+
 ## [1.9.0] - 2026-10-03
 
 - **Frost protection** (fixes

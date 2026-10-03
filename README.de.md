@@ -61,6 +61,12 @@ im Browser ausprobieren kannst.*
   mit Startzeit, Auslöser, Wassersekunden und Wetterfaktor gespeichert –
   die Status-Card zeigt die letzten Läufe, der volle Verlauf (30 Einträge)
   steht im Sensor-Attribut für Templates und Automationen
+- **Automatischer Regen-Aufschub** – geplante Läufe optional auslassen,
+  wenn die Prognose für heute mindestens eine Schwellwert-Menge Regen
+  erwartet (Standard 2 mm) – strikt Opt-in (Standard aus), mit eigenem
+  Schalter, Service und Status. Nutzt die Wetter-Entität aus dem
+  Wetter-Bereich; blockiert nie ohne Prognosedaten; manuelle Starts gehen
+  trotzdem
 - **Sequenz mit fester Reihenfolge** – jede Zone wird nacheinander bewässert,
   die Reihenfolge lässt sich in der Settings-Card per Drag & Drop ändern
 - **Individuelle Dauer pro Zone** – jede Zone hat ihre eigene Bewässerungsdauer (Minuten)
@@ -253,7 +259,7 @@ Nur die *anfängliche* Zonen-Auswahl ist ein klassischer "Einrichtungsdialog"
   Dialog-Einstellungen, sondern Live-Werte, die du direkt über die
   Settings-Card änderst (empfohlen), über die bereitgestellten Entitäten
   `switch.*_winter_mode` / `switch.*_weather_adjustment` /
-  `switch.*_frost_protection` und die `button.*`-Entitäten (Start, Stopp,
+  `switch.*_frost_protection` / `switch.*_rain_delay` und die `button.*`-Entitäten (Start, Stopp,
   Pause, Fortsetzen, Einzeltest, Skip), oder über die
   Services unten (praktisch für eigene Automationen, z. B. "Wintermodus jedes
   Jahr am 1. November aktivieren"). Der ▶-Button in einer
@@ -280,6 +286,7 @@ eigene Automationen:
 | `irrigation_sequencer.skip_next_run` | Nächsten geplanten Lauf einmal überspringen |
 | `irrigation_sequencer.clear_skip_next_run` | Vorgemerktes Überspringen zurücknehmen |
 | `irrigation_sequencer.set_frost_protection` | Geplante Läufe ab/unter Temperatur-Schwellwert blockieren |
+| `irrigation_sequencer.set_rain_delay` | Geplante Läufe bei Prognoseregen automatisch auslassen (Opt-in, Standard aus) |
 | `irrigation_sequencer.set_pause_between_zones` | Pause zwischen Zonen setzen |
 | `irrigation_sequencer.set_start_times` | Tägliche Startzeiten setzen (1–3) |
 | `irrigation_sequencer.set_rain_pause` | Regen-Pause für 1–24 Tage setzen |

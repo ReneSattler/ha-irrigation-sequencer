@@ -56,6 +56,11 @@ Home Assistant instance.*
   recorded with start time, trigger, watered seconds and weather factor -
   the status card shows the recent runs, the full history (30 entries)
   lives in the sensor attribute for templates and automations
+- **Automatic rain delay** - optionally skip scheduled runs when the
+  forecast expects at least a threshold amount of rain today (default
+  2 mm) - strictly opt-in (off by default), with its own switch, service
+  and status. Uses the weather entity from the weather section; never
+  blocks without forecast precipitation data; manual starts still work
 - **Sequential order** - each zone is irrigated one after another; the order
   can be changed by drag & drop directly in the settings card
 - **Per-zone duration** - every zone has its own irrigation duration (minutes)
@@ -231,7 +236,8 @@ else is a live setting, not a one-time config step:
   between zones, weather adjustment**: these are not part of a config dialog
   at all - they are live settings you change directly through the settings
   card (recommended), through the exposed `switch.*_winter_mode` /
-  `switch.*_weather_adjustment` / `switch.*_frost_protection` entities and
+  `switch.*_weather_adjustment` / `switch.*_frost_protection` /
+  `switch.*_rain_delay` entities and
   the `button.*` entities (start, stop, pause, resume, single test, skip),
   or via the services below (handy for your own automations, e.g. "turn on
   winter mode every November 1st"). The ▶ button on a zone's
@@ -257,6 +263,7 @@ automations:
 | `irrigation_sequencer.skip_next_run` | Skip the upcoming scheduled run once |
 | `irrigation_sequencer.clear_skip_next_run` | Take back a pending one-shot skip |
 | `irrigation_sequencer.set_frost_protection` | Block scheduled runs at/below a temperature threshold |
+| `irrigation_sequencer.set_rain_delay` | Auto-skip scheduled runs from forecast rain (opt-in, off by default) |
 | `irrigation_sequencer.set_pause_between_zones` | Set the pause between zones |
 | `irrigation_sequencer.set_start_times` | Set the daily start times (1-3) |
 | `irrigation_sequencer.set_rain_pause` | Pause irrigation for 1-24 days |
