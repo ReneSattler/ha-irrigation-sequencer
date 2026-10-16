@@ -2,6 +2,12 @@
 
 # Irrigation Sequencer
 
+[![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.7.0+-41BDF5?logo=homeassistant&logoColor=white)](https://www.home-assistant.io/)
+[![Release](https://img.shields.io/github/v/release/ReneSattler/ha-irrigation-sequencer)](https://github.com/ReneSattler/ha-irrigation-sequencer/releases)
+[![Tests](https://github.com/ReneSattler/ha-irrigation-sequencer/actions/workflows/tests.yml/badge.svg)](https://github.com/ReneSattler/ha-irrigation-sequencer/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 *[English version](README.md)*
 
 Mehrzonen-Bewässerungssteuerung für Home Assistant mit zwei grafischen
